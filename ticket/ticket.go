@@ -13,6 +13,7 @@ type ticketFunc func(map[string]*Session, map[string]*Resource)
 
 type TicketD struct {
 	ticketChan       chan ticketFunc
+	quitChan         chan interface{}
 	expireTickTimeMs int
 }
 
@@ -62,7 +63,7 @@ func NewSession(name, src string, ttl int) (s *Session) {
 }
 
 func NewTicketD(expireTickMs int) (td *TicketD) {
-	td = &TicketD{make(chan ticketFunc), expireTickMs}
+	td = &TicketD{make(chan ticketFunc), make(chan interface{}), expireTickMs}
 	if td.expireTickTimeMs == 0 {
 		td.expireTickTimeMs = expireDelayMs
 	}
@@ -80,14 +81,21 @@ func (td *TicketD) Run() {
 		select {
 		case _ = <-ticker.C:
 			expireSessions(sessions, resources)
+		case _ = <-td.quitChan:
+			log.Printf("Received quit signal. Exiting ticket processing loop...")
+			return
 		case f := <-td.ticketChan:
-			if f == nil {
-				log.Printf("Received quit signal. Exiting ticket processing loop...")
-				return
-			}
 			f(sessions, resources)
 		}
 	}
+}
+
+func (td *TicketD) Snapshot(intervalMs int, path string) {
+
+}
+
+func (td *TicketD) Quit() {
+	close(td.quitChan)
 }
 
 func expireSessions(sessions map[string]*Session, resources map[string]*Resource) {

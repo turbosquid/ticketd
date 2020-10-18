@@ -172,7 +172,7 @@ func dumpSessions(t *testing.T, td *TicketD) {
 }
 
 func stopTicketD(td *TicketD, wg *sync.WaitGroup) {
-	td.ticketChan <- nil
+	td.Quit()
 	(*wg).Wait()
 }
 
