@@ -1,8 +1,11 @@
 package ticket
 
 import (
+	"bytes"
+	"encoding/gob"
 	"fmt"
 	"github.com/segmentio/ksuid"
+	"io/ioutil"
 	"log"
 	"time"
 )
@@ -90,8 +93,30 @@ func (td *TicketD) Run() {
 	}
 }
 
+//
+// Optional snapshot loop
 func (td *TicketD) Snapshot(intervalMs int, path string) {
-
+	ticker := time.NewTicker(time.Duration(td.expireTickTimeMs) * time.Millisecond)
+	log.Printf("Snapshot loop starting...")
+	var buffer bytes.Buffer
+	enc := gob.NewEncoder(&buffer)
+	for {
+		select {
+		case _ = <-ticker.C:
+			sessions := td.GetSessions()
+			resources := td.GetResources()
+			enc.Encode(sessions)
+			enc.Encode(resources)
+			err := ioutil.WriteFile(path, buffer.Bytes(), 0644)
+			if err != nil {
+				log.Printf("ERROR: %s writing snapshot file %s.", err.Error(), path)
+			}
+			buffer.Reset()
+		case _ = <-td.quitChan:
+			log.Printf("Received quit signal. Exiting snapshot loop...")
+			return
+		}
+	}
 }
 
 func (td *TicketD) Quit() {
