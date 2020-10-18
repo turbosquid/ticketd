@@ -16,6 +16,13 @@ func TestSessiond(t *testing.T) {
 	r.NoError(err)
 	r.NotEmpty(id)
 	t.Logf("Session id: %s", id)
+	// Get a copy of the  session
+	sess, err := td.GetSession(id)
+	r.NoError(err)
+	r.NotNil(sess)
+	r.Equal("test session", sess.Name)
+	r.Equal("ANY", sess.Src)
+	r.Equal(5000, sess.Ttl)
 	err = td.CloseSession(id)
 	r.NoError(err)
 	// Verify that session no longer exists
@@ -80,9 +87,12 @@ func TestTicketIssue(t *testing.T) {
 	r.False(ok)
 	r.NoError(err)
 	r.Nil(ticket4)
+	dumpResources(t, td)
+	dumpSessions(t, td)
 	// Release a ticket and see if claimant3 now gets one
 	err = td.ReleaseTicket(claimant1Id, "test", ticket1.Name)
 	r.NoError(err)
+	dumpResources(t, td)
 	ok, ticket4, err = td.ClaimTicket(claimant3Id, "test")
 	r.True(ok)
 	r.NoError(err)
@@ -118,7 +128,47 @@ func TestIssuerTimeout(t *testing.T) {
 	r.False(ok)
 	r.Nil(ticket1)
 	r.NoError(err)
+}
 
+func dumpResources(t *testing.T, td *TicketD) {
+	resources := td.GetResources()
+	t.Logf("Dumping resource table...")
+	for _, rv := range resources {
+		t.Logf("resource: %s", rv.Name)
+		for _, tick := range rv.Tickets {
+			t.Logf("    ticket: %s", tick.Name)
+			t.Logf("        issuer: %s (%s)", tick.Issuer.Id, tick.Issuer.Name)
+			if tick.Claimant != nil {
+				t.Logf("        claimant: %s (%s)", tick.Claimant.Id, tick.Claimant.Name)
+			}
+		}
+	}
+	t.Logf("== END ==")
+}
+
+func dumpSessions(t *testing.T, td *TicketD) {
+	sessions := td.GetSessions()
+	t.Logf("Dumping session table...")
+	for _, s := range sessions {
+		t.Logf("sess: %s %s %s %d ms", s.Name, s.Id, s.Src, s.Ttl)
+		t.Logf("  Claims: ")
+		for _, tick := range s.Tickets {
+			t.Logf("    ticket: %s", tick.Name)
+			t.Logf("        issuer: %s (%s)", tick.Issuer.Id, tick.Issuer.Name)
+			if tick.Claimant != nil {
+				t.Logf("        claimant: %s (%s)", tick.Claimant.Id, tick.Claimant.Name)
+			}
+		}
+		t.Logf("  Issuances: ")
+		for _, tick := range s.Issuances {
+			t.Logf("    ticket: %s", tick.Name)
+			t.Logf("        issuer: %s (%s)", tick.Issuer.Id, tick.Issuer.Name)
+			if tick.Claimant != nil {
+				t.Logf("        claimant: %s (%s)", tick.Claimant.Id, tick.Claimant.Name)
+			}
+		}
+	}
+	t.Logf("== END ==")
 }
 
 func stopTicketD(td *TicketD, wg *sync.WaitGroup) {

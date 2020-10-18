@@ -109,10 +109,15 @@ func expireSessions(sessions map[string]*Session, resources map[string]*Resource
 	}
 }
 
+//
+// refresh session
 func (s *Session) refresh() {
 	s.expires = time.Now().Add(time.Millisecond * time.Duration(s.Ttl))
 }
 
+//
+// Clear session claims, issuances, etc
+// Used on expiration of session
 func (s *Session) clearClaims() {
 	for _, ticket := range s.Tickets {
 		if ticket.Claimant == s {
@@ -127,6 +132,42 @@ func (s *Session) clearClaims() {
 	// Clear out arrays
 	s.Tickets = []*Ticket{}
 	s.Issuances = []*Ticket{}
+}
+
+// Clone a session
+func (s *Session) clone() (out *Session) {
+	newSess := *s
+	out = &newSess
+	out.Tickets = make([]*Ticket, len(s.Tickets))
+	out.Issuances = make([]*Ticket, len(s.Issuances))
+	for i, ticket := range s.Issuances {
+		out.Issuances[i] = ticket.clone()
+	}
+	for i, ticket := range s.Tickets {
+		out.Tickets[i] = ticket.clone()
+	}
+	return
+}
+
+// Clone a ticket
+func (t *Ticket) clone() (out *Ticket) {
+	newTick := *t
+	newTick.Data = []byte{}
+	copy(newTick.Data, t.Data)
+	if t.Issuer != nil {
+		s := *(t.Issuer)
+		s.Tickets = nil
+		s.Issuances = nil
+		newTick.Issuer = &s
+	}
+	if t.Claimant != nil {
+		s := *(t.Claimant)
+		s.Tickets = nil
+		s.Issuances = nil
+		newTick.Claimant = &s
+	}
+	out = &newTick
+	return
 }
 
 func ticketAddOrUpdate(oldArray []*Ticket, t *Ticket) []*Ticket {
@@ -174,6 +215,22 @@ func (td *TicketD) CloseSession(id string) (err error) {
 			errChan <- nil
 		} else {
 			log.Printf("Closing session: %s not found", id)
+			errChan <- fmt.Errorf("Session not found: %s", id)
+		}
+	}
+	td.ticketChan <- f
+	err = <-errChan
+	return
+}
+
+func (td *TicketD) GetSession(id string) (ret *Session, err error) {
+	errChan := make(chan error)
+	ret = &Session{}
+	f := func(sessions map[string]*Session, resources map[string]*Resource) {
+		if s := sessions[id]; s != nil {
+			ret = s.clone()
+			errChan <- nil
+		} else {
 			errChan <- fmt.Errorf("Session not found: %s", id)
 		}
 	}
@@ -290,7 +347,7 @@ func (td *TicketD) ClaimTicket(sessId string, resource string) (ok bool, t *Tick
 				ticket.Claimant = sess
 				ok = true
 				sess.Tickets = ticketAddOrUpdate(sess.Tickets, ticket)
-				t = &(*ticket) // Hopefully this makes a copy and puts it in a pointer
+				t = ticket.clone()
 				break
 			}
 		}
@@ -329,4 +386,40 @@ func (td *TicketD) ReleaseTicket(sessId string, resource string, name string) (e
 }
 
 //
-// Lock functions
+// Get Copies of session and resource maps
+
+// Resources
+func (td *TicketD) GetResources() (out map[string]*Resource) {
+	out = make(map[string]*Resource)
+	errChan := make(chan error)
+	defer close(errChan)
+	f := func(sessions map[string]*Session, resources map[string]*Resource) {
+		for k, v := range resources {
+			nr := Resource{Name: k, Tickets: make(map[string]*Ticket)}
+			for tn, tick := range v.Tickets {
+				nr.Tickets[tn] = tick.clone()
+			}
+			out[k] = &nr
+		}
+		errChan <- nil
+	}
+	td.ticketChan <- f
+	_ = <-errChan
+	return
+}
+
+// Sessions
+func (td *TicketD) GetSessions() (out map[string]*Session) {
+	out = make(map[string]*Session)
+	errChan := make(chan error)
+	defer close(errChan)
+	f := func(sessions map[string]*Session, resources map[string]*Resource) {
+		for k, v := range sessions {
+			out[k] = v.clone()
+		}
+		errChan <- nil
+	}
+	td.ticketChan <- f
+	_ = <-errChan
+	return
+}
