@@ -9,9 +9,12 @@ import (
 
 const expireDelayMs = 1000
 
-var ticketChan = make(chan ticketFunc)
-
 type ticketFunc func(map[string]*Session, map[string]*Resource)
+
+type TicketD struct {
+	ticketChan       chan ticketFunc
+	expireTickTimeMs int
+}
 
 //
 // Client sessiom
@@ -58,18 +61,26 @@ func NewSession(name, src string, ttl int) (s *Session) {
 	return
 }
 
+func NewTicketD(expireTickMs int) (td *TicketD) {
+	td = &TicketD{make(chan ticketFunc), expireTickMs}
+	if td.expireTickTimeMs == 0 {
+		td.expireTickTimeMs = expireDelayMs
+	}
+	return
+}
+
 //
 // Manage locks, sessions and tickets
-func Run() {
+func (td *TicketD) Run() {
 	sessions := make(map[string]*Session)
 	resources := make(map[string]*Resource)
-	ticker := time.NewTicker(expireDelayMs * time.Millisecond)
+	ticker := time.NewTicker(time.Duration(td.expireTickTimeMs) * time.Millisecond)
 	log.Printf("Ticket processing starting...")
 	for {
 		select {
 		case _ = <-ticker.C:
 			expireSessions(sessions, resources)
-		case f := <-ticketChan:
+		case f := <-td.ticketChan:
 			if f == nil {
 				log.Printf("Received quit signal. Exiting ticket processing loop...")
 				return
@@ -139,7 +150,7 @@ func ticketRemove(oldArray []*Ticket, t *Ticket) []*Ticket {
 }
 
 // Public functions for sessions
-func OpenSession(name, src string, ttl int) (id string, err error) {
+func (td *TicketD) OpenSession(name, src string, ttl int) (id string, err error) {
 	errChan := make(chan error)
 	s := NewSession(name, src, ttl)
 	id = s.Id
@@ -148,12 +159,12 @@ func OpenSession(name, src string, ttl int) (id string, err error) {
 		log.Printf("Opened new session %s (%s)", s.Id, s.Name)
 		errChan <- nil
 	}
-	ticketChan <- f
+	td.ticketChan <- f
 	err = <-errChan
 	return
 }
 
-func CloseSession(id string) (err error) {
+func (td *TicketD) CloseSession(id string) (err error) {
 	errChan := make(chan error)
 	f := func(sessions map[string]*Session, resources map[string]*Resource) {
 		if s := sessions[id]; s != nil {
@@ -166,12 +177,12 @@ func CloseSession(id string) (err error) {
 			errChan <- fmt.Errorf("Session not found: %s", id)
 		}
 	}
-	ticketChan <- f
+	td.ticketChan <- f
 	err = <-errChan
 	return
 }
 
-func RefreshSession(id string) (err error) {
+func (td *TicketD) RefreshSession(id string) (err error) {
 	errChan := make(chan error)
 	f := func(sessions map[string]*Session, resources map[string]*Resource) {
 		if s := sessions[id]; s != nil {
@@ -181,7 +192,7 @@ func RefreshSession(id string) (err error) {
 			errChan <- fmt.Errorf("Session not found: %s", id)
 		}
 	}
-	ticketChan <- f
+	td.ticketChan <- f
 	err = <-errChan
 	return
 }
@@ -189,7 +200,7 @@ func RefreshSession(id string) (err error) {
 // Public functions for tickets
 
 // Add a ticket for a resource
-func IssueTicket(sessId string, resource string, name string, data []byte) (err error) {
+func (td *TicketD) IssueTicket(sessId string, resource string, name string, data []byte) (err error) {
 	errChan := make(chan error)
 	defer close(errChan)
 	f := func(sessions map[string]*Session, resources map[string]*Resource) {
@@ -204,24 +215,25 @@ func IssueTicket(sessId string, resource string, name string, data []byte) (err 
 			r = NewResource(resource)
 			resources[resource] = r
 		}
+		ticket := NewTicket(name, sess, data)
 		// If ticket exists, but issued by another session we are just going to take it over
 		if oldTick := r.Tickets[name]; oldTick != nil {
 			oldTick.Issuer = nil // Mark this ticket as no longer valid
+			ticket.Claimant = oldTick.Claimant
 		}
-		ticket := NewTicket(name, sess, data)
 		r.Tickets[name] = ticket // Set new ticket in ticket list
 		// Add ticket to issuance list if it is not there already
 		sess.Issuances = ticketAddOrUpdate(sess.Issuances, ticket)
 		errChan <- nil
 	}
-	ticketChan <- f
+	td.ticketChan <- f
 	err = <-errChan
 	return
 }
 
 //
 // Remove a ticket for a resource
-func RevokeTicket(sessId string, resource string, name string) (err error) {
+func (td *TicketD) RevokeTicket(sessId string, resource string, name string) (err error) {
 	errChan := make(chan error)
 	defer close(errChan)
 	f := func(sessions map[string]*Session, resources map[string]*Resource) {
@@ -248,7 +260,7 @@ func RevokeTicket(sessId string, resource string, name string) (err error) {
 		sess.Issuances = ticketRemove(sess.Issuances, tick)
 		errChan <- nil
 	}
-	ticketChan <- f
+	td.ticketChan <- f
 	err = <-errChan
 	return
 }
@@ -258,7 +270,7 @@ func RevokeTicket(sessId string, resource string, name string) (err error) {
 // ok is true and ticket will have a copy of the ticket on success
 // If the ticket is clamed, ok will be false, and ticket will be nil. err eill be nil
 // On anything else, err will be set
-func ClaimTicket(sessId string, resource string) (ok bool, t *Ticket, err error) {
+func (td *TicketD) ClaimTicket(sessId string, resource string) (ok bool, t *Ticket, err error) {
 	errChan := make(chan error)
 	defer close(errChan)
 	f := func(sessions map[string]*Session, resources map[string]*Resource) {
@@ -284,12 +296,12 @@ func ClaimTicket(sessId string, resource string) (ok bool, t *Ticket, err error)
 		}
 		errChan <- nil
 	}
-	ticketChan <- f
+	td.ticketChan <- f
 	err = <-errChan
 	return
 }
 
-func ReleaseTicket(sessId string, resource string, name string) (err error) {
+func (td *TicketD) ReleaseTicket(sessId string, resource string, name string) (err error) {
 	errChan := make(chan error)
 	defer close(errChan)
 	f := func(sessions map[string]*Session, resources map[string]*Resource) {
@@ -311,7 +323,7 @@ func ReleaseTicket(sessId string, resource string, name string) (err error) {
 		}
 		errChan <- nil
 	}
-	ticketChan <- f
+	td.ticketChan <- f
 	err = <-errChan
 	return
 }
