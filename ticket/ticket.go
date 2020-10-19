@@ -1,11 +1,8 @@
 package ticket
 
 import (
-	"bytes"
-	"encoding/gob"
 	"fmt"
 	"github.com/segmentio/ksuid"
-	"io/ioutil"
 	"log"
 	"time"
 )
@@ -35,10 +32,11 @@ type Session struct {
 //
 // Ticket for a resource
 type Ticket struct {
-	Name     string   // ticket name
-	Data     []byte   // ticket data
-	Issuer   *Session // Issuer  session of ticket. Never empty
-	Claimant *Session // Session ID of ticket claimant, if there is one or empty
+	Name         string   // ticket name
+	ResourceName string   // Resource we belong to
+	Data         []byte   // ticket data
+	Issuer       *Session // Issuer  session of ticket. Never empty
+	Claimant     *Session // Session ID of ticket claimant, if there is one or empty
 }
 
 //
@@ -53,8 +51,8 @@ func NewResource(name string) (r *Resource) {
 	return
 }
 
-func NewTicket(name string, issuer *Session, data []byte) (t *Ticket) {
-	t = &Ticket{name, data, issuer, nil}
+func NewTicket(name, resname string, issuer *Session, data []byte) (t *Ticket) {
+	t = &Ticket{name, resname, data, issuer, nil}
 	return
 }
 
@@ -89,32 +87,6 @@ func (td *TicketD) Run() {
 			return
 		case f := <-td.ticketChan:
 			f(sessions, resources)
-		}
-	}
-}
-
-//
-// Optional snapshot loop
-func (td *TicketD) Snapshot(intervalMs int, path string) {
-	ticker := time.NewTicker(time.Duration(td.expireTickTimeMs) * time.Millisecond)
-	log.Printf("Snapshot loop starting...")
-	var buffer bytes.Buffer
-	enc := gob.NewEncoder(&buffer)
-	for {
-		select {
-		case _ = <-ticker.C:
-			sessions := td.GetSessions()
-			resources := td.GetResources()
-			enc.Encode(sessions)
-			enc.Encode(resources)
-			err := ioutil.WriteFile(path, buffer.Bytes(), 0644)
-			if err != nil {
-				log.Printf("ERROR: %s writing snapshot file %s.", err.Error(), path)
-			}
-			buffer.Reset()
-		case _ = <-td.quitChan:
-			log.Printf("Received quit signal. Exiting snapshot loop...")
-			return
 		}
 	}
 }
@@ -305,7 +277,7 @@ func (td *TicketD) IssueTicket(sessId string, resource string, name string, data
 			r = NewResource(resource)
 			resources[resource] = r
 		}
-		ticket := NewTicket(name, sess, data)
+		ticket := NewTicket(name, resource, sess, data)
 		// If ticket exists, but issued by another session we are just going to take it over
 		if oldTick := r.Tickets[name]; oldTick != nil {
 			oldTick.Issuer = nil // Mark this ticket as no longer valid

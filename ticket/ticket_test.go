@@ -1,6 +1,7 @@
 package ticket
 
 import (
+	"fmt"
 	"github.com/stretchr/testify/require"
 	"sync"
 	"testing"
@@ -9,7 +10,7 @@ import (
 
 func TestSessiond(t *testing.T) {
 	r := require.New(t)
-	td, wg := startTicketD()
+	td, wg := startTicketD(false)
 	defer stopTicketD(td, wg)
 	// Create and close a session
 	id, err := td.OpenSession("test session", "ANY", 5000)
@@ -44,7 +45,7 @@ func TestSessiond(t *testing.T) {
 
 func TestTicketIssue(t *testing.T) {
 	r := require.New(t)
-	td, wg := startTicketD()
+	td, wg := startTicketD(false)
 	defer stopTicketD(td, wg)
 	// Create and close a session
 	issuerId, err := td.OpenSession("test issuer", "ANY", 1000)
@@ -87,12 +88,12 @@ func TestTicketIssue(t *testing.T) {
 	r.False(ok)
 	r.NoError(err)
 	r.Nil(ticket4)
-	dumpResources(t, td)
-	dumpSessions(t, td)
+	dumpResources(t, td, nil)
+	dumpSessions(t, td, nil)
 	// Release a ticket and see if claimant3 now gets one
 	err = td.ReleaseTicket(claimant1Id, "test", ticket1.Name)
 	r.NoError(err)
-	dumpResources(t, td)
+	dumpResources(t, td, nil)
 	ok, ticket4, err = td.ClaimTicket(claimant3Id, "test")
 	r.True(ok)
 	r.NoError(err)
@@ -110,11 +111,12 @@ func TestTicketIssue(t *testing.T) {
 	r.False(ok)
 	r.Error(err)
 	r.Nil(ticket5)
+	time.Sleep(1 * time.Second)
 }
 
 func TestIssuerTimeout(t *testing.T) {
 	r := require.New(t)
-	td, wg := startTicketD()
+	td, wg := startTicketD(false)
 	defer stopTicketD(td, wg)
 	// Create a session, issue a ticket and let it expire
 	issuerId, err := td.OpenSession("test issuer", "ANY", 500)
@@ -130,8 +132,49 @@ func TestIssuerTimeout(t *testing.T) {
 	r.NoError(err)
 }
 
-func dumpResources(t *testing.T, td *TicketD) {
+func TestSnapshot(t *testing.T) {
+	r := require.New(t)
+	td, wg := startTicketD(false)
+	stopped := false
+	defer func() {
+		if !stopped {
+			stopTicketD(td, wg)
+		}
+	}()
+	// Create bunch of sessions and tickets
+	for i := 0; i < 10; i++ {
+		id, err := td.OpenSession(fmt.Sprintf("issuer %d", i), "ANY", 5000)
+		r.NoError(err)
+		err = td.IssueTicket(id, "test", fmt.Sprintf("ticket %d", i), []byte{})
+		r.NoError(err)
+	}
+	// Create 10 claimant sessions to claim tickets
+	for i := 0; i < 10; i++ {
+		id, err := td.OpenSession(fmt.Sprintf("claimant %d", i), "ANY", 5000)
+		r.NoError(err)
+		ok, _, err := td.ClaimTicket(id, "test")
+		r.NoError(err)
+		r.True(ok)
+	}
+	// Compare sessions/resources
+	sessions := td.GetSessions()
+	err := snapshotSessions("./snaps", sessions)
+	r.NoError(err)
 	resources := td.GetResources()
+	err = snapshotResources("./snaps", resources)
+	r.NoError(err)
+	lsess, lres, err := td.LoadSnapshot("./snaps")
+	r.NoError(err)
+	dumpSessions(t, td, lsess)
+	dumpResources(t, td, lres)
+	stopTicketD(td, wg)
+	stopped = true
+}
+
+func dumpResources(t *testing.T, td *TicketD, resources map[string]*Resource) {
+	if resources == nil {
+		resources = td.GetResources()
+	}
 	t.Logf("Dumping resource table...")
 	for _, rv := range resources {
 		t.Logf("resource: %s", rv.Name)
@@ -146,8 +189,10 @@ func dumpResources(t *testing.T, td *TicketD) {
 	t.Logf("== END ==")
 }
 
-func dumpSessions(t *testing.T, td *TicketD) {
-	sessions := td.GetSessions()
+func dumpSessions(t *testing.T, td *TicketD, sessions map[string]*Session) {
+	if sessions == nil {
+		sessions = td.GetSessions()
+	}
 	t.Logf("Dumping session table...")
 	for _, s := range sessions {
 		t.Logf("sess: %s %s %s %d ms", s.Name, s.Id, s.Src, s.Ttl)
@@ -176,7 +221,7 @@ func stopTicketD(td *TicketD, wg *sync.WaitGroup) {
 	(*wg).Wait()
 }
 
-func startTicketD() (*TicketD, *sync.WaitGroup) {
+func startTicketD(snap bool) (*TicketD, *sync.WaitGroup) {
 	td := NewTicketD(500)
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -184,5 +229,12 @@ func startTicketD() (*TicketD, *sync.WaitGroup) {
 		defer wg.Done()
 		td.Run()
 	}()
+	if snap {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			td.Snapshot(500, "./snaps")
+		}()
+	}
 	return td, &wg
 }
