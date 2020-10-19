@@ -5,6 +5,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"sync"
 	"testing"
+
 	"time"
 )
 
@@ -148,13 +149,19 @@ func TestSnapshot(t *testing.T) {
 		err = td.IssueTicket(id, "test", fmt.Sprintf("ticket %d", i), []byte{})
 		r.NoError(err)
 	}
-	// Create 10 claimant sessions to claim tickets
+	// create 10 claimant sessions to claim tickets
 	for i := 0; i < 10; i++ {
-		id, err := td.OpenSession(fmt.Sprintf("claimant %d", i), "ANY", 5000)
+		id, err := td.OpenSession(fmt.Sprintf("claimant %d", i), "any", 5000)
 		r.NoError(err)
 		ok, _, err := td.ClaimTicket(id, "test")
 		r.NoError(err)
 		r.True(ok)
+	}
+
+	// create 5 sessions with no claims or issuances
+	for i := 0; i < 10; i++ {
+		_, err := td.OpenSession(fmt.Sprintf("idle %d", i), "any", 5000)
+		r.NoError(err)
 	}
 	// Compare sessions/resources
 	sessions := td.GetSessions()
@@ -165,6 +172,8 @@ func TestSnapshot(t *testing.T) {
 	r.NoError(err)
 	lsess, lres, err := td.LoadSnapshot("./snaps")
 	r.NoError(err)
+	r.NotNil(lsess)
+	r.NotNil(lres)
 	dumpSessions(t, td, lsess)
 	dumpResources(t, td, lres)
 	stopTicketD(td, wg)

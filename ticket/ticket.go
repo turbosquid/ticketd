@@ -161,14 +161,14 @@ func (t *Ticket) clone() (out *Ticket) {
 	copy(newTick.Data, t.Data)
 	if t.Issuer != nil {
 		s := *(t.Issuer)
-		s.Tickets = nil
-		s.Issuances = nil
+		s.Tickets = []*Ticket{}
+		s.Issuances = []*Ticket{}
 		newTick.Issuer = &s
 	}
 	if t.Claimant != nil {
 		s := *(t.Claimant)
-		s.Tickets = nil
-		s.Issuances = nil
+		s.Tickets = []*Ticket{}
+		s.Issuances = []*Ticket{}
 		newTick.Claimant = &s
 	}
 	out = &newTick
@@ -382,6 +382,32 @@ func (td *TicketD) ReleaseTicket(sessId string, resource string, name string) (e
 		if ticket != nil && ticket.Claimant == sess {
 			ticket.Claimant = nil
 			sess.Tickets = ticketRemove(sess.Tickets, ticket)
+		}
+		errChan <- nil
+	}
+	td.ticketChan <- f
+	err = <-errChan
+	return
+}
+
+func (td *TicketD) HasTicket(sessId string, resource string, name string) (ok bool, err error) {
+	errChan := make(chan error)
+	defer close(errChan)
+	f := func(sessions map[string]*Session, resources map[string]*Resource) {
+		sess := sessions[sessId]
+		if sess == nil {
+			errChan <- fmt.Errorf("Invalid session id: %s", sessId)
+			return
+		}
+		// Get resource
+		r := resources[resource]
+		if r == nil {
+			errChan <- fmt.Errorf("Unknown resource: %s", resource)
+			return
+		}
+		ticket := r.Tickets[name]
+		if ticket != nil && ticket.Claimant == sess {
+			ok = true
 		}
 		errChan <- nil
 	}

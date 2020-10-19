@@ -2,6 +2,7 @@ package ticket
 
 import (
 	"encoding/gob"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -21,18 +22,55 @@ func (td *TicketD) LoadSnapshot(path string) (sessions map[string]*Session, reso
 	}
 	// Now we have to fix up a lot of pointers
 	for _, sess := range sessions {
+		if sess.Issuances == nil {
+			sess.Issuances = []*Ticket{}
+		}
+		if sess.Tickets == nil {
+			sess.Tickets = []*Ticket{}
+		}
+	}
+	for _, sess := range sessions {
 		for i, ticket := range sess.Tickets {
+			// Be sure the things we THINK exist exist in resources
+			res := resources[ticket.ResourceName]
+			if res == nil {
+				return nil, nil, fmt.Errorf("Unable to find resource %s", ticket.ResourceName)
+			}
 			// Replace ticket pointer here to pointer from resources
-			sess.Tickets[i] = resources[ticket.ResourceName].Tickets[ticket.Name]
+			sess.Tickets[i] = res.Tickets[ticket.Name]
+			if sess.Tickets[i] == nil {
+				return nil, nil, fmt.Errorf("Ticket %s does not exist for resource %s", ticket.Name, res.Name)
+			}
 			// Updateticket claimant pointer to THIS session pointer
 			sess.Tickets[i].Claimant = sess
 		}
 		for i, ticket := range sess.Issuances {
+			// Be sure the things we THINK exist exist in resources
+			res := resources[ticket.ResourceName]
+			if res == nil {
+				return nil, nil, fmt.Errorf("Unable to find resource %s", ticket.ResourceName)
+			}
 			// Replace ticket pointer here to pointer from resources
-			sess.Issuances[i] = resources[ticket.ResourceName].Tickets[ticket.Name]
+			sess.Issuances[i] = res.Tickets[ticket.Name]
+			if sess.Issuances[i] == nil {
+				return nil, nil, fmt.Errorf("Ticket %s does not exist for resource %s", ticket.Name, res.Name)
+			}
 			sess.Issuances[i].Issuer = sess
 		}
 		sess.refresh()
+	}
+	for _, res := range resources {
+		for _, ticket := range res.Tickets {
+			if ticket.Data == nil {
+				ticket.Data = []byte{}
+			}
+			if ticket.Issuer != nil {
+				ticket.Issuer = sessions[ticket.Issuer.Id]
+			}
+			if ticket.Claimant != nil {
+				ticket.Claimant = sessions[ticket.Claimant.Id]
+			}
+		}
 	}
 	return
 }
@@ -109,7 +147,7 @@ func loadSessions(path string) (sessions map[string]*Session, err error) {
 			}
 			break
 		}
-		sessions[s.Name] = &s
+		sessions[s.Id] = &s
 	}
 	return
 }
