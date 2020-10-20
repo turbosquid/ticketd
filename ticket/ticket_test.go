@@ -205,8 +205,9 @@ func TestStartStop(t *testing.T) {
 }
 
 func TestSnapshot(t *testing.T) {
+	os.RemoveAll("./snaps")
 	r := require.New(t)
-	td := startTicketD(false)
+	td := startTicketD(true)
 	stopped := false
 	defer func() {
 		if !stopped {
@@ -236,13 +237,12 @@ func TestSnapshot(t *testing.T) {
 	}
 	// Compare sessions/resources
 	sessions := td.GetSessions()
-	err := snapshotSessions("./snaps", sessions)
-	r.NoError(err)
 	resources := td.GetResources()
-	err = snapshotResources("./snaps", resources)
-	r.NoError(err)
-	lsess, lres, err := td.LoadSnapshot()
-	r.NoError(err)
+	time.Sleep(1 * time.Second) // Give us time to snapshot
+	stopTicketD(td)
+	td = startTicketD(true)
+	lsess := td.GetSessions()
+	lres := td.GetResources()
 	r.NotNil(lsess)
 	r.NotNil(lres)
 	for k, v := range sessions {
