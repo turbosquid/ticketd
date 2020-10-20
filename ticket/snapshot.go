@@ -10,13 +10,13 @@ import (
 	"time"
 )
 
-func (td *TicketD) LoadSnapshot(path string) (sessions map[string]*Session, resources map[string]*Resource, err error) {
+func (td *TicketD) LoadSnapshot() (sessions map[string]*Session, resources map[string]*Resource, err error) {
 
-	sessions, err = loadSessions(path)
+	sessions, err = loadSessions(td.snapshotPath)
 	if err != nil {
 		return
 	}
-	resources, err = loadResources(path)
+	resources, err = loadResources(td.snapshotPath)
 	if err != nil {
 		return
 	}
@@ -77,22 +77,22 @@ func (td *TicketD) LoadSnapshot(path string) (sessions map[string]*Session, reso
 
 //
 // Optional snapshot loop
-func (td *TicketD) Snapshot(intervalMs int, path string) {
-	ticker := time.NewTicker(time.Duration(td.expireTickTimeMs) * time.Millisecond)
+func (td *TicketD) Snapshot() {
+	ticker := time.NewTicker(time.Duration(td.snapshotInterval) * time.Millisecond)
 	log.Printf("Snapshot loop starting...")
-	os.MkdirAll(path, 0755)
+	os.MkdirAll(td.snapshotPath, 0755)
 	for {
 		select {
 		case _ = <-ticker.C:
 			sess := td.GetSessions()
-			err := snapshotSessions(path, sess)
+			err := snapshotSessions(td.snapshotPath, sess)
 			if err != nil {
-				log.Printf("Unable to snapshot sessions: %s, %s", path, err.Error())
+				log.Printf("Unable to snapshot sessions: %s, %s", td.snapshotPath, err.Error())
 			}
 			res := td.GetResources()
-			err = snapshotResources(path, res)
+			err = snapshotResources(td.snapshotPath, res)
 			if err != nil {
-				log.Printf("Unable to snapshot resources: %s, %s", path, err.Error())
+				log.Printf("Unable to snapshot resources: %s, %s", td.snapshotPath, err.Error())
 			}
 		case _ = <-td.quitChan:
 			log.Printf("Received quit signal. Exiting snapshot loop...")

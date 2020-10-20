@@ -194,7 +194,7 @@ func TestSnapshot(t *testing.T) {
 	resources := td.GetResources()
 	err = snapshotResources("./snaps", resources)
 	r.NoError(err)
-	lsess, lres, err := td.LoadSnapshot("./snaps")
+	lsess, lres, err := td.LoadSnapshot()
 	r.NoError(err)
 	r.NotNil(lsess)
 	r.NotNil(lres)
@@ -342,7 +342,7 @@ func stopTicketD(td *TicketD, wg *sync.WaitGroup) {
 }
 
 func startTicketD(snap bool) (*TicketD, *sync.WaitGroup) {
-	td := NewTicketD(500)
+	td := NewTicketD(500, "./snaps", 500)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -353,7 +353,7 @@ func startTicketD(snap bool) (*TicketD, *sync.WaitGroup) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			td.Snapshot(500, "./snaps")
+			td.Snapshot()
 		}()
 	}
 	return td, &wg

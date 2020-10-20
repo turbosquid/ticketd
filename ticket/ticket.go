@@ -15,6 +15,8 @@ type TicketD struct {
 	ticketChan       chan ticketFunc
 	quitChan         chan interface{}
 	expireTickTimeMs int
+	snapshotInterval int
+	snapshotPath     string
 }
 
 //
@@ -63,10 +65,13 @@ func NewSession(name, src string, ttl int) (s *Session) {
 	return
 }
 
-func NewTicketD(expireTickMs int) (td *TicketD) {
-	td = &TicketD{make(chan ticketFunc), make(chan interface{}), expireTickMs}
+func NewTicketD(expireTickMs int, snapshotPath string, snapshotInterval int) (td *TicketD) {
+	td = &TicketD{make(chan ticketFunc), make(chan interface{}), expireTickMs, snapshotInterval, snapshotPath}
 	if td.expireTickTimeMs == 0 {
 		td.expireTickTimeMs = expireDelayMs
+	}
+	if td.snapshotInterval == 0 {
+		td.snapshotInterval = 1000
 	}
 	return
 }
