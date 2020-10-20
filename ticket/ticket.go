@@ -14,6 +14,7 @@ type ticketFunc func(map[string]*Session, map[string]*Resource)
 type TicketD struct {
 	ticketChan       chan ticketFunc
 	quitChan         chan interface{}
+	quitSnapChan     chan interface{}
 	expireTickTimeMs int
 	snapshotInterval int
 	snapshotPath     string
@@ -66,7 +67,8 @@ func NewSession(name, src string, ttl int) (s *Session) {
 }
 
 func NewTicketD(expireTickMs int, snapshotPath string, snapshotInterval int) (td *TicketD) {
-	td = &TicketD{make(chan ticketFunc), make(chan interface{}), expireTickMs, snapshotInterval, snapshotPath}
+	td = &TicketD{make(chan ticketFunc), make(chan interface{}), nil,
+		expireTickMs, snapshotInterval, snapshotPath}
 	if td.expireTickTimeMs == 0 {
 		td.expireTickTimeMs = expireDelayMs
 	}
@@ -81,23 +83,56 @@ func NewTicketD(expireTickMs int, snapshotPath string, snapshotInterval int) (td
 func (td *TicketD) Run() {
 	sessions := make(map[string]*Session)
 	resources := make(map[string]*Resource)
+	if td.snapshotPath != "" {
+		log.Printf("Loading snapshots from %s", td.snapshotPath)
+		sessionsLoaded, resourcesLoaded, err := td.LoadSnapshot()
+		if err != nil {
+			log.Printf("WARNING: Loading snapshots: %s", err.Error())
+		} else {
+			sessions = sessionsLoaded
+			resources = resourcesLoaded
+		}
+	}
 	ticker := time.NewTicker(time.Duration(td.expireTickTimeMs) * time.Millisecond)
 	log.Printf("Ticket processing starting...")
 	for {
 		select {
 		case _ = <-ticker.C:
 			expireSessions(sessions, resources)
-		case _ = <-td.quitChan:
-			log.Printf("Received quit signal. Exiting ticket processing loop...")
-			return
+		case q := <-td.quitChan:
+			if q == nil {
+				log.Printf("Received quit signal. Exiting ticket processing loop...")
+				close(td.quitChan)
+				return
+			}
 		case f := <-td.ticketChan:
 			f(sessions, resources)
 		}
 	}
 }
 
+func (td *TicketD) Start() {
+	go func() {
+		td.Run()
+	}()
+	if td.snapshotPath != "" {
+		td.quitSnapChan = make(chan interface{})
+		go func() {
+			td.Snapshot()
+		}()
+	}
+}
+
 func (td *TicketD) Quit() {
-	close(td.quitChan)
+	if td.quitSnapChan != nil {
+		log.Printf("Signaling snapshotter to quit...")
+		td.quitSnapChan <- nil
+		log.Printf("Waiting for snapshotter to quit...")
+		_ = <-td.quitSnapChan
+	}
+	log.Printf("Signaling ticket processor to quit...")
+	td.quitChan <- nil
+	_ = <-td.quitChan
 }
 
 func expireSessions(sessions map[string]*Session, resources map[string]*Resource) {

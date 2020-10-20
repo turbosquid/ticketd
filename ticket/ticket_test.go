@@ -4,16 +4,15 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/stretchr/testify/require"
-	"sync"
+	"os"
 	"testing"
-
 	"time"
 )
 
 func TestSessiond(t *testing.T) {
 	r := require.New(t)
-	td, wg := startTicketD(false)
-	defer stopTicketD(td, wg)
+	td := startTicketD(false)
+	defer stopTicketD(td)
 	// Create and close a session
 	id, err := td.OpenSession("test session", "ANY", 5000)
 	r.NoError(err)
@@ -47,8 +46,8 @@ func TestSessiond(t *testing.T) {
 
 func TestTicketIssue(t *testing.T) {
 	r := require.New(t)
-	td, wg := startTicketD(false)
-	defer stopTicketD(td, wg)
+	td := startTicketD(false)
+	defer stopTicketD(td)
 	// Create and close a session
 	issuerId, err := td.OpenSession("test issuer", "ANY", 1000)
 	r.NoError(err)
@@ -118,8 +117,8 @@ func TestTicketIssue(t *testing.T) {
 
 func TestIssuerTimeout(t *testing.T) {
 	r := require.New(t)
-	td, wg := startTicketD(false)
-	defer stopTicketD(td, wg)
+	td := startTicketD(false)
+	defer stopTicketD(td)
 	// Create a session, issue a ticket and let it expire
 	issuerId, err := td.OpenSession("test issuer", "ANY", 500)
 	r.NoError(err)
@@ -136,8 +135,8 @@ func TestIssuerTimeout(t *testing.T) {
 
 func TestClaimantTimeout(t *testing.T) {
 	r := require.New(t)
-	td, wg := startTicketD(false)
-	defer stopTicketD(td, wg)
+	td := startTicketD(false)
+	defer stopTicketD(td)
 	// Create a session, issue a ticket and let it expire
 	issuerId, err := td.OpenSession("test issuer", "ANY", 5000)
 	r.NoError(err)
@@ -157,13 +156,61 @@ func TestClaimantTimeout(t *testing.T) {
 	r.NotNil(ticket)
 }
 
-func TestSnapshot(t *testing.T) {
+func TestPersistence(t *testing.T) {
+	os.RemoveAll("./snaps")
 	r := require.New(t)
-	td, wg := startTicketD(false)
+	td := startTicketD(true)
 	stopped := false
 	defer func() {
 		if !stopped {
-			stopTicketD(td, wg)
+			stopTicketD(td)
+		}
+	}()
+	// Create a session, issue a ticket and let it expire
+	issuerId, err := td.OpenSession("test issuer", "ANY", 5000)
+	r.NoError(err)
+	err = td.IssueTicket(issuerId, "test", "foo", []byte("test foo data"))
+	r.NoError(err)
+	claimant1Id, err := td.OpenSession("test claimant 1", "ANY", 5000)
+	r.NoError(err)
+	claimant2Id, err := td.OpenSession("test claimant 2", "ANY", 5000)
+	r.NoError(err)
+	ok, ticket, err := td.ClaimTicket(claimant1Id, "test")
+	r.True(ok)
+	r.NoError(err)
+	r.NotNil(ticket)
+	// Give us time to snapshot
+	time.Sleep(2 * time.Second)
+	stopTicketD(td)
+	// Restart and check that claimant 1 still has ticket and claimant2 exists
+	td = startTicketD(true)
+	ok, err = td.HasTicket(claimant1Id, "test", ticket.Name)
+	r.NoError(err)
+	r.True(ok)
+	err = td.RefreshSession(claimant2Id)
+	r.NoError(err)
+	// Be sure ticket cannot be claimed
+	claimant3Id, err := td.OpenSession("test claimant 3", "ANY", 5000)
+	r.NoError(err)
+	ok, ticket, err = td.ClaimTicket(claimant3Id, "test")
+	r.False(ok)
+	r.NoError(err)
+	r.Nil(ticket)
+}
+
+func TestStartStop(t *testing.T) {
+	td := startTicketD(true)
+	time.Sleep(2 * time.Second)
+	stopTicketD(td)
+}
+
+func TestSnapshot(t *testing.T) {
+	r := require.New(t)
+	td := startTicketD(false)
+	stopped := false
+	defer func() {
+		if !stopped {
+			stopTicketD(td)
 		}
 	}()
 	// Create bunch of sessions and tickets
@@ -215,7 +262,7 @@ func TestSnapshot(t *testing.T) {
 	}
 	dumpSessions(t, td, lsess)
 	dumpResources(t, td, lres)
-	stopTicketD(td, wg)
+	stopTicketD(td)
 	stopped = true
 }
 
@@ -336,25 +383,21 @@ func dumpSessions(t *testing.T, td *TicketD, sessions map[string]*Session) {
 	t.Logf("== END ==")
 }
 
-func stopTicketD(td *TicketD, wg *sync.WaitGroup) {
+func stopTicketD(td *TicketD) {
 	td.Quit()
-	(*wg).Wait()
 }
 
-func startTicketD(snap bool) (*TicketD, *sync.WaitGroup) {
-	td := NewTicketD(500, "./snaps", 500)
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		td.Run()
-	}()
+func startTicketD(snap bool) *TicketD {
+	snapPath := ""
 	if snap {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			td.Snapshot()
-		}()
+		snapPath = "./snaps"
 	}
-	return td, &wg
+	td := NewTicketD(500, snapPath, 500)
+	td.Start()
+	return td
+}
+
+func TestMain(m *testing.M) {
+	// call flag.Parse() here if TestMain uses flags
+	os.Exit(m.Run())
 }

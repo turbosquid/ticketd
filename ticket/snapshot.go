@@ -94,8 +94,9 @@ func (td *TicketD) Snapshot() {
 			if err != nil {
 				log.Printf("Unable to snapshot resources: %s, %s", td.snapshotPath, err.Error())
 			}
-		case _ = <-td.quitChan:
+		case _ = <-td.quitSnapChan:
 			log.Printf("Received quit signal. Exiting snapshot loop...")
+			close(td.quitSnapChan) // Signals to caller that we are stopped
 			return
 		}
 	}
