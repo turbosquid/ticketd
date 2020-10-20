@@ -1,6 +1,7 @@
 package ticket
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/stretchr/testify/require"
 	"sync"
@@ -133,6 +134,29 @@ func TestIssuerTimeout(t *testing.T) {
 	r.NoError(err)
 }
 
+func TestClaimantTimeout(t *testing.T) {
+	r := require.New(t)
+	td, wg := startTicketD(false)
+	defer stopTicketD(td, wg)
+	// Create a session, issue a ticket and let it expire
+	issuerId, err := td.OpenSession("test issuer", "ANY", 5000)
+	r.NoError(err)
+	err = td.IssueTicket(issuerId, "test", "foo", []byte("test foo data"))
+	r.NoError(err)
+	claimant1Id, err := td.OpenSession("test claimant 1", "ANY", 500)
+	r.NoError(err)
+	claimant2Id, err := td.OpenSession("test claimant 2", "ANY", 2000)
+	r.NoError(err)
+	ok, ticket, err := td.ClaimTicket(claimant1Id, "test")
+	r.True(ok)
+	r.NoError(err)
+	time.Sleep(1 * time.Second)
+	ok, ticket, err = td.ClaimTicket(claimant2Id, "test")
+	r.True(ok)
+	r.NoError(err)
+	r.NotNil(ticket)
+}
+
 func TestSnapshot(t *testing.T) {
 	r := require.New(t)
 	td, wg := startTicketD(false)
@@ -174,10 +198,97 @@ func TestSnapshot(t *testing.T) {
 	r.NoError(err)
 	r.NotNil(lsess)
 	r.NotNil(lres)
+	for k, v := range sessions {
+		ok, msgs := compareSession(v, lsess[k])
+		if !ok {
+			t.Logf("%#v", msgs)
+			r.True(ok)
+		}
+	}
+	tickets := resources["test"].Tickets
+	for k, v := range tickets {
+		ok, msgs := compareTicket(v, tickets[k])
+		if !ok {
+			t.Logf("%#v", msgs)
+			r.True(ok)
+		}
+	}
 	dumpSessions(t, td, lsess)
 	dumpResources(t, td, lres)
 	stopTicketD(td, wg)
 	stopped = true
+}
+
+func compareSession(l *Session, r *Session) (ok bool, msgs []string) {
+	if l == nil && r == nil {
+		return true, nil
+	}
+	if (l != nil && r == nil) || (l == nil && r != nil) {
+		msgs = append(msgs, "session nil/not-nil mismatch")
+		return false, msgs
+	}
+	if l.Id != r.Id {
+		msgs = append(msgs, "Ids do not match")
+	}
+	if l.Name != r.Name {
+		msgs = append(msgs, "Names do not match")
+	}
+	if l.Src != r.Src {
+		msgs = append(msgs, "Srcss do not match")
+	}
+	if l.Ttl != r.Ttl {
+		msgs = append(msgs, "Ttlss do not match")
+	}
+	if len(l.Tickets) != len(r.Tickets) {
+		msgs = append(msgs, "Claimed ticket arr lengths  do not match")
+		return
+	}
+	if len(l.Issuances) != len(r.Issuances) {
+		msgs = append(msgs, "Issued  ticket arr lengths  do not match")
+		return
+	}
+	for i, v := range l.Issuances {
+		if v.Name != r.Issuances[i].Name {
+			msgs = append(msgs, "Issued  ticket mismatch")
+		}
+	}
+	for i, v := range l.Tickets {
+		if v.Name != r.Tickets[i].Name {
+			msgs = append(msgs, "Claimed  ticket mismatch")
+		}
+	}
+	if len(msgs) == 0 {
+		ok = true
+	} else {
+		msgs = append([]string{l.Id}, msgs...)
+	}
+	return
+}
+
+func compareTicket(l *Ticket, r *Ticket) (ok bool, msgs []string) {
+	if l.Name != r.Name {
+		msgs = append(msgs, "Names do not match")
+	}
+	if l.ResourceName != r.ResourceName {
+		msgs = append(msgs, "Resource Names do not match")
+	}
+	if bytes.Compare(l.Data, r.Data) != 0 {
+		msgs = append(msgs, "Data do not match")
+	}
+	sessok, _ := compareSession(l.Claimant, r.Claimant)
+	if !sessok {
+		msgs = append(msgs, "Claimants  do not match")
+	}
+	sessok, _ = compareSession(l.Issuer, r.Issuer)
+	if !sessok {
+		msgs = append(msgs, "Issuers  do not match")
+	}
+	if len(msgs) == 0 {
+		ok = true
+	} else {
+		msgs = append([]string{fmt.Sprintf("%s/%s", l.ResourceName, l.Name)}, msgs...)
+	}
+	return
 }
 
 func dumpResources(t *testing.T, td *TicketD, resources map[string]*Resource) {

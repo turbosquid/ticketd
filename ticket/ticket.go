@@ -271,6 +271,7 @@ func (td *TicketD) IssueTicket(sessId string, resource string, name string, data
 			errChan <- fmt.Errorf("Invalid session id: %s", sessId)
 			return
 		}
+		sess.refresh()
 		// Create resource if it does not exist
 		r := resources[resource]
 		if r == nil {
