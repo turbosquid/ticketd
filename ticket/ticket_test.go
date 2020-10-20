@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func TestSessiond(t *testing.T) {
+func TestSession(t *testing.T) {
 	r := require.New(t)
 	td := startTicketD(false)
 	defer stopTicketD(td)

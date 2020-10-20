@@ -49,16 +49,22 @@ type Resource struct {
 	Tickets map[string]*Ticket
 }
 
+//
+// Create a new resource
 func NewResource(name string) (r *Resource) {
 	r = &Resource{name, make(map[string]*Ticket)}
 	return
 }
 
+//
+// Create a new ticket
 func NewTicket(name, resname string, issuer *Session, data []byte) (t *Ticket) {
 	t = &Ticket{name, resname, data, issuer, nil}
 	return
 }
 
+//
+// Creae a new session
 func NewSession(name, src string, ttl int) (s *Session) {
 	guid := ksuid.New()
 	s = &Session{Name: name, Id: guid.String(), Src: src, Ttl: ttl, Tickets: []*Ticket{}, Issuances: []*Ticket{}}
@@ -66,6 +72,8 @@ func NewSession(name, src string, ttl int) (s *Session) {
 	return
 }
 
+//
+// Create a new ticketd
 func NewTicketD(expireTickMs int, snapshotPath string, snapshotInterval int) (td *TicketD) {
 	td = &TicketD{make(chan ticketFunc), make(chan interface{}), nil,
 		expireTickMs, snapshotInterval, snapshotPath}
@@ -80,7 +88,7 @@ func NewTicketD(expireTickMs int, snapshotPath string, snapshotInterval int) (td
 
 //
 // Manage locks, sessions and tickets
-func (td *TicketD) Run() {
+func (td *TicketD) run() {
 	sessions := make(map[string]*Session)
 	resources := make(map[string]*Resource)
 	if td.snapshotPath != "" {
@@ -111,23 +119,26 @@ func (td *TicketD) Run() {
 	}
 }
 
+//
+// Start pertinent goprocs
 func (td *TicketD) Start() {
 	go func() {
-		td.Run()
+		td.run()
 	}()
 	if td.snapshotPath != "" {
 		td.quitSnapChan = make(chan interface{})
 		go func() {
-			td.Snapshot()
+			td.snapshot()
 		}()
 	}
 }
 
+//
+// Signal procs to stop using quit channels
 func (td *TicketD) Quit() {
 	if td.quitSnapChan != nil {
 		log.Printf("Signaling snapshotter to quit...")
 		td.quitSnapChan <- nil
-		log.Printf("Waiting for snapshotter to quit...")
 		_ = <-td.quitSnapChan
 	}
 	log.Printf("Signaling ticket processor to quit...")
@@ -236,6 +247,8 @@ func ticketRemove(oldArray []*Ticket, t *Ticket) []*Ticket {
 }
 
 // Public functions for sessions
+
+// Open a new session
 func (td *TicketD) OpenSession(name, src string, ttl int) (id string, err error) {
 	errChan := make(chan error)
 	s := NewSession(name, src, ttl)
@@ -250,6 +263,8 @@ func (td *TicketD) OpenSession(name, src string, ttl int) (id string, err error)
 	return
 }
 
+//
+// Close a sessio and release all tickets issued and claimed
 func (td *TicketD) CloseSession(id string) (err error) {
 	errChan := make(chan error)
 	f := func(sessions map[string]*Session, resources map[string]*Resource) {
@@ -268,6 +283,8 @@ func (td *TicketD) CloseSession(id string) (err error) {
 	return
 }
 
+//
+// Get a copy of a session
 func (td *TicketD) GetSession(id string) (ret *Session, err error) {
 	errChan := make(chan error)
 	ret = &Session{}
@@ -284,6 +301,8 @@ func (td *TicketD) GetSession(id string) (ret *Session, err error) {
 	return
 }
 
+//
+// Refresh session timer
 func (td *TicketD) RefreshSession(id string) (err error) {
 	errChan := make(chan error)
 	f := func(sessions map[string]*Session, resources map[string]*Resource) {
@@ -404,6 +423,8 @@ func (td *TicketD) ClaimTicket(sessId string, resource string) (ok bool, t *Tick
 	return
 }
 
+//
+// Release a ticket for a resource back to pool
 func (td *TicketD) ReleaseTicket(sessId string, resource string, name string) (err error) {
 	errChan := make(chan error)
 	defer close(errChan)
@@ -431,6 +452,8 @@ func (td *TicketD) ReleaseTicket(sessId string, resource string, name string) (e
 	return
 }
 
+//
+// Verify that a session holds a parituclar ticket
 func (td *TicketD) HasTicket(sessId string, resource string, name string) (ok bool, err error) {
 	errChan := make(chan error)
 	defer close(errChan)

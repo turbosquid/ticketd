@@ -77,7 +77,7 @@ func (td *TicketD) LoadSnapshot() (sessions map[string]*Session, resources map[s
 
 //
 // Optional snapshot loop
-func (td *TicketD) Snapshot() {
+func (td *TicketD) snapshot() {
 	ticker := time.NewTicker(time.Duration(td.snapshotInterval) * time.Millisecond)
 	log.Printf("Snapshot loop starting...")
 	os.MkdirAll(td.snapshotPath, 0755)
