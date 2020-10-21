@@ -110,10 +110,10 @@ func TestTicketIssue(t *testing.T) {
 	r.False(ok)
 	r.NoError(err)
 	r.Nil(ticket5)
-	// Ensure error if we claim a ticket for a non-existent resource
+	// Ensure not ok and no error  if we claim a ticket for a non-existent resource
 	ok, ticket5, err = td.ClaimTicket(claimant3Id, "invalid-resource")
 	r.False(ok)
-	r.Error(err)
+	r.NoError(err)
 	r.Nil(ticket5)
 	time.Sleep(1 * time.Second)
 }
