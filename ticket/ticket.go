@@ -296,7 +296,7 @@ func (td *TicketD) GetSession(id string) (ret *Session, err error) {
 			ret = s.clone()
 			errChan <- nil
 		} else {
-			errChan <- fmt.Errorf("Session not found: %s", id)
+			errChan <- fmt.Errorf("Session not found: %s (%w)", id, ErrNotFound)
 		}
 	}
 	td.ticketChan <- f
@@ -313,7 +313,7 @@ func (td *TicketD) RefreshSession(id string) (err error) {
 			s.refresh()
 			errChan <- nil
 		} else {
-			errChan <- fmt.Errorf("Session not found: %s", id)
+			errChan <- fmt.Errorf("Session not found: %s (%w)", id, ErrNotFound)
 		}
 	}
 	td.ticketChan <- f
@@ -330,7 +330,7 @@ func (td *TicketD) IssueTicket(sessId string, resource string, name string, data
 	f := func(sessions map[string]*Session, resources map[string]*Resource) {
 		sess := sessions[sessId]
 		if sess == nil {
-			errChan <- fmt.Errorf("Invalid session id: %s", sessId)
+			errChan <- fmt.Errorf("Session not found: %s (%w)", sessId, ErrNotFound)
 			return
 		}
 		sess.refresh()
@@ -364,13 +364,13 @@ func (td *TicketD) RevokeTicket(sessId string, resource string, name string) (er
 	f := func(sessions map[string]*Session, resources map[string]*Resource) {
 		sess := sessions[sessId]
 		if sess == nil {
-			errChan <- fmt.Errorf("Invalid session id: %s", sessId)
+			errChan <- fmt.Errorf("Session not found: %s (%w)", sessId, ErrNotFound)
 			return
 		}
 		// Get resource
 		r := resources[resource]
 		if r == nil {
-			errChan <- fmt.Errorf("Unknown resource: %s", resource)
+			errChan <- fmt.Errorf("Unknown resource: %s (%w)", resource, ErrNotFound)
 			return
 		}
 		// Get ticket -- if it exists
@@ -401,13 +401,14 @@ func (td *TicketD) ClaimTicket(sessId string, resource string) (ok bool, t *Tick
 	f := func(sessions map[string]*Session, resources map[string]*Resource) {
 		sess := sessions[sessId]
 		if sess == nil {
-			errChan <- fmt.Errorf("Invalid session id: %s", sessId)
+			errChan <- fmt.Errorf("Session not found: %s (%w)", sessId, ErrNotFound)
 			return
 		}
 		// Get resource
 		r := resources[resource]
 		if r == nil {
-			errChan <- fmt.Errorf("Unknown resource: %s", resource)
+			// We treat a missing resource as if the ticket is already claimed
+			errChan <- nil
 			return
 		}
 		for _, ticket := range r.Tickets {
@@ -434,13 +435,13 @@ func (td *TicketD) ReleaseTicket(sessId string, resource string, name string) (e
 	f := func(sessions map[string]*Session, resources map[string]*Resource) {
 		sess := sessions[sessId]
 		if sess == nil {
-			errChan <- fmt.Errorf("Invalid session id: %s", sessId)
+			errChan <- fmt.Errorf("Session not found: %s (%w)", sessId, ErrNotFound)
 			return
 		}
 		// Get resource
 		r := resources[resource]
 		if r == nil {
-			errChan <- fmt.Errorf("Unknown resource: %s", resource)
+			errChan <- fmt.Errorf("Unknown resource: %s (%w)", resource, ErrNotFound)
 			return
 		}
 		ticket := r.Tickets[name]
@@ -463,13 +464,13 @@ func (td *TicketD) HasTicket(sessId string, resource string, name string) (ok bo
 	f := func(sessions map[string]*Session, resources map[string]*Resource) {
 		sess := sessions[sessId]
 		if sess == nil {
-			errChan <- fmt.Errorf("Invalid session id: %s", sessId)
+			errChan <- fmt.Errorf("Session not found: %s (%w)", sessId, ErrNotFound)
 			return
 		}
 		// Get resource
 		r := resources[resource]
 		if r == nil {
-			errChan <- fmt.Errorf("Unknown resource: %s", resource)
+			errChan <- fmt.Errorf("Unknown resource: %s (%w)", resource, ErrNotFound)
 			return
 		}
 		ticket := r.Tickets[name]
