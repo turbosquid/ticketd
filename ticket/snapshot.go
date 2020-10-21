@@ -4,19 +4,20 @@ import (
 	"encoding/gob"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"time"
 )
 
-func (td *TicketD) LoadSnapshot() (sessions map[string]*Session, resources map[string]*Resource, err error) {
+//
+// Load snapshot from disk if it exists
+func (td *TicketD) loadSnapshot(path string) (sessions map[string]*Session, resources map[string]*Resource, err error) {
 
-	sessions, err = loadSessions(td.snapshotPath)
+	sessions, err = loadSessions(path)
 	if err != nil {
 		return
 	}
-	resources, err = loadResources(td.snapshotPath)
+	resources, err = loadResources(path)
 	if err != nil {
 		return
 	}
@@ -77,29 +78,38 @@ func (td *TicketD) LoadSnapshot() (sessions map[string]*Session, resources map[s
 
 //
 // Optional snapshot loop
-func (td *TicketD) snapshot() {
+func (td *TicketD) snapshotProc() {
 	ticker := time.NewTicker(time.Duration(td.snapshotInterval) * time.Millisecond)
-	log.Printf("Snapshot loop starting...")
+	td.logger.Log(2, "Snapshot loop starting...")
 	os.MkdirAll(td.snapshotPath, 0755)
 	for {
 		select {
 		case _ = <-ticker.C:
 			sess := td.GetSessions()
-			err := snapshotSessions(td.snapshotPath, sess)
-			if err != nil {
-				log.Printf("Unable to snapshot sessions: %s, %s", td.snapshotPath, err.Error())
-			}
 			res := td.GetResources()
-			err = snapshotResources(td.snapshotPath, res)
+			err := snapshot(td.snapshotPath, sess, res)
 			if err != nil {
-				log.Printf("Unable to snapshot resources: %s, %s", td.snapshotPath, err.Error())
+				td.logger.Log(1, "Unable to snapshot: %s", err.Error())
 			}
 		case _ = <-td.quitSnapChan:
-			log.Printf("Received quit signal. Exiting snapshot loop...")
+			td.logger.Log(2, "Received quit signal. Exiting snapshot loop...")
 			close(td.quitSnapChan) // Signals to caller that we are stopped
 			return
 		}
 	}
+}
+
+//
+// Snapshot all the things
+func snapshot(path string, sessions map[string]*Session, resources map[string]*Resource) error {
+	if err := snapshotSessions(path, sessions); err != nil {
+		return fmt.Errorf("Unable to snapshot sessions: %s, %s", path, err.Error())
+
+	}
+	if err := snapshotResources(path, resources); err != nil {
+		return fmt.Errorf("Unable to snapshot resources: %s, %s", path, err.Error())
+	}
+	return nil
 }
 
 func snapshotSessions(path string, sessions map[string]*Session) (err error) {

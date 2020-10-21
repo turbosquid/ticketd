@@ -2,12 +2,15 @@ package ticket
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"github.com/stretchr/testify/require"
 	"os"
 	"testing"
 	"time"
 )
+
+var logLevel = flag.Int("loglevel", 0, "Log level to use")
 
 func TestSession(t *testing.T) {
 	r := require.New(t)
@@ -392,12 +395,12 @@ func startTicketD(snap bool) *TicketD {
 	if snap {
 		snapPath = "./snaps"
 	}
-	td := NewTicketD(500, snapPath, 500)
+	td := NewTicketD(500, snapPath, 500, &DefaultLogger{*logLevel})
 	td.Start()
 	return td
 }
 
 func TestMain(m *testing.M) {
-	// call flag.Parse() here if TestMain uses flags
+	flag.Parse()
 	os.Exit(m.Run())
 }

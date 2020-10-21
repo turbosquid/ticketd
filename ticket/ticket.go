@@ -3,7 +3,6 @@ package ticket
 import (
 	"fmt"
 	"github.com/segmentio/ksuid"
-	"log"
 	"time"
 )
 
@@ -18,6 +17,7 @@ type TicketD struct {
 	expireTickTimeMs int
 	snapshotInterval int
 	snapshotPath     string
+	logger           Logger
 }
 
 //
@@ -74,42 +74,45 @@ func NewSession(name, src string, ttl int) (s *Session) {
 
 //
 // Create a new ticketd
-func NewTicketD(expireTickMs int, snapshotPath string, snapshotInterval int) (td *TicketD) {
+func NewTicketD(expireTickMs int, snapshotPath string, snapshotInterval int, logger Logger) (td *TicketD) {
 	td = &TicketD{make(chan ticketFunc), make(chan interface{}), nil,
-		expireTickMs, snapshotInterval, snapshotPath}
+		expireTickMs, snapshotInterval, snapshotPath, logger}
 	if td.expireTickTimeMs == 0 {
 		td.expireTickTimeMs = expireDelayMs
 	}
 	if td.snapshotInterval == 0 {
 		td.snapshotInterval = 1000
 	}
+	if td.logger == nil {
+		td.logger = &DefaultLogger{3}
+	}
 	return
 }
 
 //
 // Manage locks, sessions and tickets
-func (td *TicketD) run() {
+func (td *TicketD) ticketProc() {
 	sessions := make(map[string]*Session)
 	resources := make(map[string]*Resource)
 	if td.snapshotPath != "" {
-		log.Printf("Loading snapshots from %s", td.snapshotPath)
-		sessionsLoaded, resourcesLoaded, err := td.LoadSnapshot()
+		td.logger.Log(2, "Loading snapshots from %s", td.snapshotPath)
+		sessionsLoaded, resourcesLoaded, err := td.loadSnapshot(td.snapshotPath)
 		if err != nil {
-			log.Printf("WARNING: Loading snapshots: %s", err.Error())
+			td.logger.Log(1, "WARNING: Loading snapshots: %s", err.Error())
 		} else {
 			sessions = sessionsLoaded
 			resources = resourcesLoaded
 		}
 	}
 	ticker := time.NewTicker(time.Duration(td.expireTickTimeMs) * time.Millisecond)
-	log.Printf("Ticket processing starting...")
+	td.logger.Log(2, "Ticket processing starting...")
 	for {
 		select {
 		case _ = <-ticker.C:
-			expireSessions(sessions, resources)
+			td.expireSessions(sessions, resources)
 		case q := <-td.quitChan:
 			if q == nil {
-				log.Printf("Received quit signal. Exiting ticket processing loop...")
+				td.logger.Log(2, "Received quit signal. Exiting ticket processing loop...")
 				close(td.quitChan)
 				return
 			}
@@ -123,12 +126,12 @@ func (td *TicketD) run() {
 // Start pertinent goprocs
 func (td *TicketD) Start() {
 	go func() {
-		td.run()
+		td.ticketProc()
 	}()
 	if td.snapshotPath != "" {
 		td.quitSnapChan = make(chan interface{})
 		go func() {
-			td.snapshot()
+			td.snapshotProc()
 		}()
 	}
 }
@@ -137,20 +140,20 @@ func (td *TicketD) Start() {
 // Signal procs to stop using quit channels
 func (td *TicketD) Quit() {
 	if td.quitSnapChan != nil {
-		log.Printf("Signaling snapshotter to quit...")
+		td.logger.Log(2, "Signaling snapshotter to quit...")
 		td.quitSnapChan <- nil
 		_ = <-td.quitSnapChan
 	}
-	log.Printf("Signaling ticket processor to quit...")
+	td.logger.Log(2, "Signaling ticket processor to quit...")
 	td.quitChan <- nil
 	_ = <-td.quitChan
 }
 
-func expireSessions(sessions map[string]*Session, resources map[string]*Resource) {
+func (td *TicketD) expireSessions(sessions map[string]*Session, resources map[string]*Resource) {
 	// Expire sessions
 	for id, s := range sessions {
 		if s.expires.Before(time.Now()) {
-			log.Printf("Expiring session %s (%s) with timeout %ds ms", s.Id, s.Name, s.Ttl)
+			td.logger.Log(3, "Expiring session %s (%s) with timeout %ds ms", s.Id, s.Name, s.Ttl)
 			s.clearClaims()
 			delete(sessions, id)
 		}
@@ -255,7 +258,7 @@ func (td *TicketD) OpenSession(name, src string, ttl int) (id string, err error)
 	id = s.Id
 	f := func(sessions map[string]*Session, resources map[string]*Resource) {
 		sessions[s.Id] = s
-		log.Printf("Opened new session %s (%s)", s.Id, s.Name)
+		td.logger.Log(3, "Opened new session %s (%s)", s.Id, s.Name)
 		errChan <- nil
 	}
 	td.ticketChan <- f
@@ -269,12 +272,12 @@ func (td *TicketD) CloseSession(id string) (err error) {
 	errChan := make(chan error)
 	f := func(sessions map[string]*Session, resources map[string]*Resource) {
 		if s := sessions[id]; s != nil {
-			log.Printf("Closing  session %s (%s)", s.Id, s.Name)
+			td.logger.Log(3, "Closing  session %s (%s)", s.Id, s.Name)
 			s.clearClaims()
 			delete(sessions, id)
 			errChan <- nil
 		} else {
-			log.Printf("Closing session: %s not found", id)
+			td.logger.Log(3, "Closing session: %s not found", id)
 			errChan <- fmt.Errorf("Session not found: %s", id)
 		}
 	}
