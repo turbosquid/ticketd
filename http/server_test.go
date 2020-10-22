@@ -87,7 +87,7 @@ func TestSessionHeartBeat(t *testing.T) {
 	// Test session heartbeat when session has expired
 	sess, _, err = cli.OpenSession("test-2", 200)
 	r.NoError(err)
-	sess.RunHeartbeat(300*time.Millisecond, 100*time.Millisecond, false, f)
+	sess.RunHeartbeat(300*time.Millisecond, 100*time.Millisecond, true, f)
 	time.Sleep(2 * time.Second)
 	r.Error(hbErr)
 	<-notChan
