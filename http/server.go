@@ -52,7 +52,7 @@ func getSingleQueryParam(url *url.URL, qp string, defaultValue string) (ret stri
 func getSingleQueryParamInt(url *url.URL, qp string, defaultValue int) (ret int) {
 	ret = defaultValue
 	if vals, ok := url.Query()[qp]; ok {
-		if n, err := strconv.Atoi(vals[0]); err != nil {
+		if n, err := strconv.Atoi(vals[0]); err == nil {
 			ret = n
 		}
 	}
