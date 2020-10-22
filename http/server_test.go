@@ -46,7 +46,7 @@ func TestSession(t *testing.T) {
 }
 
 func startServer() (td *ticket.TicketD, svr *http.Server) {
-	td = ticket.NewTicketD(500, "", 0, nil)
+	td = ticket.NewTicketD(500, "", 0, &ticket.DefaultLogger{1})
 	td.Start()
 	svr = StartServer("localhost:8080", td)
 	return

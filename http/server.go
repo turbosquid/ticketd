@@ -122,6 +122,7 @@ func StartServer(listenOn string, td *ticket.TicketD) (svr *http.Server) {
 		if err := svr.ListenAndServe(); err != http.ErrServerClosed {
 			log.Fatalf("Unable to start http server on %s -> %s", listenOn, err.Error())
 		}
+		log.Printf("Stopped ticketd API server by request.")
 	}()
 	return
 }
