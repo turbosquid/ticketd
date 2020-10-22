@@ -278,7 +278,7 @@ func (td *TicketD) CloseSession(id string) (err error) {
 			errChan <- nil
 		} else {
 			td.logger.Log(3, "Closing session: %s not found", id)
-			errChan <- fmt.Errorf("Session not found: %s", id)
+			errChan <- fmt.Errorf("Session not found: %s (%w)", id, ErrNotFound)
 		}
 	}
 	td.ticketChan <- f

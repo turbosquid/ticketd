@@ -7,6 +7,7 @@ import (
 	"github.com/turbosquid/ticketd/ticket"
 	"io/ioutil"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -21,6 +22,7 @@ type Session struct {
 	c             *Client
 	Id            string
 	heartBeatChan chan interface{}
+	heartBeatWg   sync.WaitGroup
 }
 
 func NewClient(url string, timeout time.Duration) (c *Client) {
@@ -78,19 +80,19 @@ func (c *Client) OpenSession(name string, ttlMs int) (session *Session, code int
 	if err != nil {
 		return
 	}
-	session = &Session{c, id, nil}
+	session = &Session{c, id, nil, sync.WaitGroup{}}
 	return
 }
 
 //
 // Close this session
 func (s *Session) Close() (code int, err error) {
+	s.CancelHeartBeat()
 	errMsg := ""
 	code, err = s.c.call("DELETE", fmt.Sprintf("/sessions/%s", s.Id), nil, &errMsg)
 	if err != nil {
 		return
 	}
-	defer s.CancelHeartBeat()
 	return
 }
 
@@ -126,9 +128,30 @@ func (s *Session) Get() (sess *ticket.Session, code int, err error) {
 // timeout -- http timeout for call
 // ignoreNonHttpErrors -- keep trying on non-http errors
 // notify  -- function to call on backgrund proc exit. Will pass error or nil
-func (s *Session) RunHeartbeat(interval time.Duration, timeout *time.Duration, ignoreNonHttpErrors bool, notify func(err error)) {
+func (s *Session) RunHeartbeat(interval time.Duration, timeout time.Duration, ignoreNonHttpErrors bool, notify func(err error)) {
 	s.heartBeatChan = make(chan interface{})
-
+	// Make a copy of the session and change the timeout
+	sessCopy := *s
+	sessCopy.c.Timeout = timeout
+	s.heartBeatWg.Add(1)
+	go func() {
+		defer s.heartBeatWg.Done()
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-s.heartBeatChan:
+				go notify(nil)
+				return
+			case <-ticker.C:
+				code, err := sessCopy.Refresh()
+				if err != nil && (!ignoreNonHttpErrors || code != 0) {
+					go notify(err)
+					return
+				}
+			}
+		}
+	}()
 }
 
 //
@@ -136,6 +159,7 @@ func (s *Session) RunHeartbeat(interval time.Duration, timeout *time.Duration, i
 func (s *Session) CancelHeartBeat() {
 	if s.heartBeatChan != nil {
 		close(s.heartBeatChan)
+		s.heartBeatWg.Wait()
 		s.heartBeatChan = nil
 	}
 }
