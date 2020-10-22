@@ -24,7 +24,7 @@ func ApiErr(w http.ResponseWriter, err error) {
 	if errors.Is(err, ticket.ErrNotFound) {
 		code = 404
 	}
-	Json(w, err.Error(), code)
+	HttpError(w, err.Error(), code)
 }
 
 func Json(w http.ResponseWriter, data interface{}, code int) {

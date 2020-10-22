@@ -18,8 +18,9 @@ type Client struct {
 }
 
 type Session struct {
-	c  *Client
-	Id string
+	c             *Client
+	Id            string
+	heartBeatChan chan interface{}
 }
 
 func NewClient(url string, timeout time.Duration) (c *Client) {
@@ -59,56 +60,82 @@ func (c *Client) call(verb, path string, obj interface{}, objOut interface{}) (c
 	if err != nil {
 		return
 	}
-	// fmt.Printf("%d\n%s", code, string(body))
-	err = json.Unmarshal(body, objOut)
+	if code >= 300 {
+		err = fmt.Errorf("HTTP %d = %s", code, string(body))
+	} else {
+		code = 0 // Only worry about http error codes
+		// fmt.Printf("%d\n%s", code, string(body))
+		err = json.Unmarshal(body, objOut)
+	}
 	return
 }
 
-func (c *Client) OpenSession(name string, ttlMs int) (session *Session, err error) {
+//
+// Opena new session
+func (c *Client) OpenSession(name string, ttlMs int) (session *Session, code int, err error) {
 	id := ""
-	code, err := c.call("POST", fmt.Sprintf("/sessions?name=%s&ttl=%d", name, ttlMs), nil, &id)
+	code, err = c.call("POST", fmt.Sprintf("/sessions?name=%s&ttl=%d", name, ttlMs), nil, &id)
 	if err != nil {
 		return
 	}
-	if code >= 300 {
-		return nil, fmt.Errorf("Non http success code: %d", code)
-	}
-	session = &Session{c, id}
+	session = &Session{c, id, nil}
 	return
 }
 
-func (s *Session) Close() (err error) {
+//
+// Close this session
+func (s *Session) Close() (code int, err error) {
 	errMsg := ""
-	code, err := s.c.call("DELETE", fmt.Sprintf("/sessions/%s", s.Id), nil, &errMsg)
+	code, err = s.c.call("DELETE", fmt.Sprintf("/sessions/%s", s.Id), nil, &errMsg)
 	if err != nil {
 		return
 	}
-	if code >= 300 {
-		return fmt.Errorf("Non http success code: %d (%s)", code, errMsg)
-	}
+	defer s.CancelHeartBeat()
 	return
 }
 
-func (s *Session) Refresh() (err error) {
+//
+// Refresh this session at server
+func (s *Session) Refresh() (code int, err error) {
 	errMsg := ""
-	code, err := s.c.call("PUT", fmt.Sprintf("/sessions/%s", s.Id), nil, &errMsg)
+	code, err = s.c.call("PUT", fmt.Sprintf("/sessions/%s", s.Id), nil, &errMsg)
 	if err != nil {
 		return
-	}
-	if code >= 300 {
-		return fmt.Errorf("Non http success code: %d (%s)", code, errMsg)
 	}
 	return
 }
 
-func (s *Session) Get() (sess *ticket.Session, err error) {
+//
+// Get a copy of this session
+func (s *Session) Get() (sess *ticket.Session, code int, err error) {
 	sess = &ticket.Session{}
-	code, err := s.c.call("GET", fmt.Sprintf("/sessions/%s", s.Id), nil, sess)
+	code, err = s.c.call("GET", fmt.Sprintf("/sessions/%s", s.Id), nil, sess)
 	if err != nil {
 		return
 	}
-	if code >= 300 {
-		return nil, fmt.Errorf("Non http success code: %d", code)
-	}
 	return
+}
+
+//
+// Run background "heartbeat" session refresh. Keeps session alive until
+// a) The session is closed, or
+// b) an http error occurs, or
+// c) any other error occurs, unless we specify to ignore these. The idea is to optionally ignore transient connection errorsa
+//
+// interval -- interval between refreshes
+// timeout -- http timeout for call
+// ignoreNonHttpErrors -- keep trying on non-http errors
+// notify  -- function to call on backgrund proc exit. Will pass error or nil
+func (s *Session) RunHeartbeat(interval time.Duration, timeout *time.Duration, ignoreNonHttpErrors bool, notify func(err error)) {
+	s.heartBeatChan = make(chan interface{})
+
+}
+
+//
+// Cancel heartbeat proc -- if running, else a noop
+func (s *Session) CancelHeartBeat() {
+	if s.heartBeatChan != nil {
+		close(s.heartBeatChan)
+		s.heartBeatChan = nil
+	}
 }
