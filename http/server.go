@@ -115,9 +115,9 @@ func StartServer(listenOn string, td *ticket.TicketD) (svr *http.Server) {
 		Handler: router,
 	}
 	router.POST("/api/v1/sessions", middleWare(td, postSessions))
-	router.PUT("/api/v1/sessions", middleWare(td, putSessions))
-	router.DELETE("/api/v1/sessions", middleWare(td, deleteSessions))
-	router.GET("/api/v1/sessions", middleWare(td, getSessions))
+	router.PUT("/api/v1/sessions/:id", middleWare(td, putSessions))
+	router.DELETE("/api/v1/sessions/:id", middleWare(td, deleteSessions))
+	router.GET("/api/v1/sessions/:id", middleWare(td, getSessions))
 	go func() {
 		if err := svr.ListenAndServe(); err != http.ErrServerClosed {
 			log.Fatalf("Unable to start http server on %s -> %s", listenOn, err.Error())
