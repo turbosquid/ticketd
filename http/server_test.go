@@ -60,8 +60,13 @@ func TestSession(t *testing.T) {
 
 func TestSessionHeartBeat(t *testing.T) {
 	r := require.New(t)
+	stopped := false
 	td, svr := startServer()
-	defer stopServer(td, svr)
+	defer func() {
+		if !stopped {
+			stopServer(td, svr)
+		}
+	}()
 	cli := NewClient("http://localhost:8080", 1*time.Second)
 	time.Sleep(10 * time.Millisecond) // We have to allow server time to start
 	// Open a session
@@ -99,6 +104,15 @@ func TestSessionHeartBeat(t *testing.T) {
 	_, code, err = sess.Get()
 	r.Error(err)
 	r.Equal(404, code)
+	// Test heartbeat session failure when connection is lost from service
+	sess, _, err = cli.OpenSession("test-3", 500)
+	r.NoError(err)
+	sess.RunHeartbeat(100*time.Millisecond, 100*time.Millisecond, false, f)
+	time.Sleep(2 * time.Second)
+	stopServer(td, svr)
+	r.Error(hbErr)
+	<-notChan
+	stopped = true
 }
 
 func startServer() (td *ticket.TicketD, svr *http.Server) {
