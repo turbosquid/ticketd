@@ -3,6 +3,8 @@ package ticket
 import (
 	"fmt"
 	"github.com/segmentio/ksuid"
+	"log"
+	"runtime/debug"
 	"time"
 )
 
@@ -104,6 +106,16 @@ func (td *TicketD) ticketProc() (restart bool) {
 			resources = resourcesLoaded
 		}
 	}
+
+	// Handle panics -- print info, then exit with restart flag true
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("PANIC in http  hander: %#v", r)
+			log.Printf("Stack trace:\n%s", debug.Stack())
+			restart = true
+		}
+	}()
+
 	ticker := time.NewTicker(time.Duration(td.expireTickTimeMs) * time.Millisecond)
 	td.logger.Log(2, "Ticket processing starting...")
 	for {

@@ -4,8 +4,10 @@ import (
 	"encoding/gob"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"time"
 )
 
@@ -82,6 +84,14 @@ func (td *TicketD) snapshotProc() (restart bool) {
 	ticker := time.NewTicker(time.Duration(td.snapshotInterval) * time.Millisecond)
 	td.logger.Log(2, "Snapshot loop starting...")
 	os.MkdirAll(td.snapshotPath, 0755)
+	// Handle panics -- print info, then exit with restart flag true
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("PANIC in http  hander: %#v", r)
+			log.Printf("Stack trace:\n%s", debug.Stack())
+			restart = true
+		}
+	}()
 	for {
 		select {
 		case _ = <-ticker.C:
