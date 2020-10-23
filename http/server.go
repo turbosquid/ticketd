@@ -150,7 +150,7 @@ func deleteTickets(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, p
 		http.Error(w, "Missing ticket name", http.StatusUnprocessableEntity)
 		return
 	}
-	err := td.ReleaseTicket(sessid, resource, name)
+	err := td.RevokeTicket(sessid, resource, name)
 	if err != nil {
 		ApiErr(w, err)
 		return
@@ -171,7 +171,6 @@ func postClaims(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, para
 		ApiErr(w, err)
 		return
 	}
-	log.Printf("postClaims ticket %#v", ticket)
 	tr := &TicketResponse{}
 	tr.Claimed = ok
 	if ok {

@@ -13,6 +13,29 @@ import (
 
 const apiPath = "/api/v1"
 
+type HttpError struct {
+	Code    int
+	Message string
+}
+
+func (err *HttpError) Error() string {
+	return err.Message
+}
+
+func NewHttpError(code int, msg string) (err *HttpError) {
+	return &HttpError{code, msg}
+}
+
+func HttpErrorCode(err error) (code int) {
+	if err == nil {
+		return
+	}
+	if herr, ok := err.(*HttpError); ok {
+		code = herr.Code
+	}
+	return
+}
+
 type Client struct {
 	baseUrl string
 	http.Client
@@ -34,7 +57,7 @@ func (c *Client) urlStr(path string) string {
 	return fmt.Sprintf("%s%s%s", c.baseUrl, apiPath, path)
 }
 
-func (c *Client) callBytes(verb, path string, in []byte, objOut interface{}) (code int, err error) {
+func (c *Client) callBytes(verb, path string, in []byte, objOut interface{}) (err error) {
 	var request *http.Request
 	if in != nil {
 		request, err = http.NewRequest(verb, c.urlStr(path), bytes.NewBuffer(in))
@@ -49,23 +72,22 @@ func (c *Client) callBytes(verb, path string, in []byte, objOut interface{}) (co
 	if err != nil {
 		return
 	}
-	code = resp.StatusCode
+	code := resp.StatusCode
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return
 	}
 	if code >= 300 {
-		err = fmt.Errorf("HTTP %d = %s", code, string(body))
+		err = NewHttpError(code, fmt.Sprintf("HTTP %d = %s", code, string(body)))
 	} else {
-		code = 0 // Only worry about http error codes
 		// fmt.Printf("%d\n%s", code, string(body))
 		err = json.Unmarshal(body, objOut)
 	}
 	return
 }
 
-func (c *Client) call(verb, path string, obj interface{}, objOut interface{}) (code int, err error) {
+func (c *Client) call(verb, path string, obj interface{}, objOut interface{}) (err error) {
 	var requestBody []byte
 	if obj != nil {
 		requestBody, err = json.Marshal(obj)
@@ -73,15 +95,15 @@ func (c *Client) call(verb, path string, obj interface{}, objOut interface{}) (c
 			return
 		}
 	}
-	code, err = c.callBytes(verb, path, requestBody, objOut)
+	err = c.callBytes(verb, path, requestBody, objOut)
 	return
 }
 
 //
 // Opena new session
-func (c *Client) OpenSession(name string, ttlMs int) (session *Session, code int, err error) {
+func (c *Client) OpenSession(name string, ttlMs int) (session *Session, err error) {
 	id := ""
-	code, err = c.call("POST", fmt.Sprintf("/sessions?name=%s&ttl=%d", name, ttlMs), nil, &id)
+	err = c.call("POST", fmt.Sprintf("/sessions?name=%s&ttl=%d", name, ttlMs), nil, &id)
 	if err != nil {
 		return
 	}
@@ -91,10 +113,10 @@ func (c *Client) OpenSession(name string, ttlMs int) (session *Session, code int
 
 //
 // Close this session
-func (s *Session) Close() (code int, err error) {
+func (s *Session) Close() (err error) {
 	s.CancelHeartBeat()
 	errMsg := ""
-	code, err = s.c.call("DELETE", fmt.Sprintf("/sessions/%s", s.Id), nil, &errMsg)
+	err = s.c.call("DELETE", fmt.Sprintf("/sessions/%s", s.Id), nil, &errMsg)
 	if err != nil {
 		return
 	}
@@ -103,9 +125,9 @@ func (s *Session) Close() (code int, err error) {
 
 //
 // Refresh this session at server
-func (s *Session) Refresh() (code int, err error) {
+func (s *Session) Refresh() (err error) {
 	errMsg := ""
-	code, err = s.c.call("PUT", fmt.Sprintf("/sessions/%s", s.Id), nil, &errMsg)
+	err = s.c.call("PUT", fmt.Sprintf("/sessions/%s", s.Id), nil, &errMsg)
 	if err != nil {
 		return
 	}
@@ -114,9 +136,9 @@ func (s *Session) Refresh() (code int, err error) {
 
 //
 // Get a copy of this session
-func (s *Session) Get() (sess *ticket.Session, code int, err error) {
+func (s *Session) Get() (sess *ticket.Session, err error) {
 	sess = &ticket.Session{}
-	code, err = s.c.call("GET", fmt.Sprintf("/sessions/%s", s.Id), nil, sess)
+	err = s.c.call("GET", fmt.Sprintf("/sessions/%s", s.Id), nil, sess)
 	if err != nil {
 		return
 	}
@@ -149,7 +171,8 @@ func (s *Session) RunHeartbeat(interval time.Duration, timeout time.Duration, ig
 				go notify(nil)
 				return
 			case <-ticker.C:
-				code, err := sessCopy.Refresh()
+				err := sessCopy.Refresh()
+				code := HttpErrorCode(err)
 				if err != nil && (!ignoreNonHttpErrors || code != 0) {
 					go notify(err)
 					return
@@ -171,41 +194,41 @@ func (s *Session) CancelHeartBeat() {
 
 //
 // Issue and revoke tickets
-func (s *Session) IssueTicket(resource, name string, data []byte) (code int, err error) {
+func (s *Session) IssueTicket(resource, name string, data []byte) (err error) {
 	errMsg := ""
-	code, err = s.c.callBytes("POST", fmt.Sprintf("/tickets/%s?name=%s&sessid=%s", resource, name, s.Id), data, &errMsg)
+	err = s.c.callBytes("POST", fmt.Sprintf("/tickets/%s?name=%s&sessid=%s", resource, name, s.Id), data, &errMsg)
 	return
 }
 
-func (s *Session) RevokeTicket(resource, name string) (code int, err error) {
+func (s *Session) RevokeTicket(resource, name string) (err error) {
 	errMsg := ""
-	code, err = s.c.call("POST", fmt.Sprintf("/tickets/%s?name=%s&sessid=%s", resource, name, s.Id), nil, &errMsg)
+	err = s.c.call("DELETE", fmt.Sprintf("/tickets/%s?name=%s&sessid=%s", resource, name, s.Id), nil, &errMsg)
 	return
 }
 
 //
 // Claim and release tickets
-func (s *Session) ClaimTicket(resource string) (ok bool, ticket *ticket.Ticket, code int, err error) {
+func (s *Session) ClaimTicket(resource string) (ok bool, ticket *ticket.Ticket, err error) {
 	resp := &TicketResponse{}
-	code, err = s.c.call("POST", fmt.Sprintf("/claims/%s?sessid=%s", resource, s.Id), nil, resp)
+	err = s.c.call("POST", fmt.Sprintf("/claims/%s?sessid=%s", resource, s.Id), nil, resp)
 	if err != nil {
 		return
 	}
 	if !resp.Claimed {
-		return false, nil, 0, nil
+		return false, nil, nil
 	}
 	ok = true
 	ticket = &(resp.Ticket)
 	return
 }
 
-func (s *Session) ReleaseTicket(resource, name string) (code int, err error) {
+func (s *Session) ReleaseTicket(resource, name string) (err error) {
 	errMsg := ""
-	code, err = s.c.call("DELETE", fmt.Sprintf("/claims/%s?name=%s&sessid=%s", resource, name, s.Id), nil, &errMsg)
+	err = s.c.call("DELETE", fmt.Sprintf("/claims/%s?name=%s&sessid=%s", resource, name, s.Id), nil, &errMsg)
 	return
 }
 
-func (s *Session) HasTicket(resource, name string) (ok bool, code int, err error) {
-	code, err = s.c.call("GET", fmt.Sprintf("/claims/%s?name=%s&sessid=%s", resource, name, s.Id), nil, &ok)
+func (s *Session) HasTicket(resource, name string) (ok bool, err error) {
+	err = s.c.call("GET", fmt.Sprintf("/claims/%s?name=%s&sessid=%s", resource, name, s.Id), nil, &ok)
 	return
 }
