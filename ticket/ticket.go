@@ -211,7 +211,10 @@ func (s *Session) clone() (out *Session) {
 // Clone a ticket
 func (t *Ticket) clone() (out *Ticket) {
 	newTick := *t
-	newTick.Data = []byte{}
+	if t.Data != nil {
+		newTick.Data = make([]byte, len(t.Data))
+		copy(newTick.Data, t.Data)
+	}
 	copy(newTick.Data, t.Data)
 	if t.Issuer != nil {
 		s := *(t.Issuer)

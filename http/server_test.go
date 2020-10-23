@@ -115,6 +115,34 @@ func TestSessionHeartBeat(t *testing.T) {
 	stopped = true
 }
 
+func TestTickets(t *testing.T) {
+	r := require.New(t)
+	td, svr := startServer()
+	defer stopServer(td, svr)
+	cli := NewClient("http://localhost:8080", 1*time.Second)
+	time.Sleep(10 * time.Millisecond) // We have to allow server time to start
+	// Open a session
+	issuer, _, err := cli.OpenSession("issuer", 100)
+	r.NoError(err)
+	claimant, _, err := cli.OpenSession("claimant", 100)
+	r.NoError(err)
+	code, err := issuer.IssueTicket("test", "ticket-1", []byte("FOO"))
+	r.NoError(err)
+	r.Empty(code)
+	ok, ticket, code, err := claimant.ClaimTicket("test")
+	r.NoError(err)
+	r.True(ok)
+	r.NotNil(ticket)
+	r.Zero(code)
+	t.Logf("Got ticket: %#v", ticket)
+	t.Logf("    Issuer: %#v", ticket.Issuer)
+	t.Logf("    Claimant: %#v", ticket.Claimant)
+	r.Equal(ticket.Name, "ticket-1")
+	r.Equal(ticket.ResourceName, "test")
+	r.Equal(ticket.Data, []byte("FOO"))
+
+}
+
 func startServer() (td *ticket.TicketD, svr *http.Server) {
 	td = ticket.NewTicketD(500, "", 0, &ticket.DefaultLogger{1})
 	td.Start()

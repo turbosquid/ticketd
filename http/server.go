@@ -171,6 +171,7 @@ func postClaims(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, para
 		ApiErr(w, err)
 		return
 	}
+	log.Printf("postClaims ticket %#v", ticket)
 	tr := &TicketResponse{}
 	tr.Claimed = ok
 	if ok {
