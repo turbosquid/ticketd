@@ -91,7 +91,7 @@ func NewTicketD(expireTickMs int, snapshotPath string, snapshotInterval int, log
 
 //
 // Manage locks, sessions and tickets
-func (td *TicketD) ticketProc() {
+func (td *TicketD) ticketProc() (restart bool) {
 	sessions := make(map[string]*Session)
 	resources := make(map[string]*Resource)
 	if td.snapshotPath != "" {
@@ -120,18 +120,27 @@ func (td *TicketD) ticketProc() {
 			f(sessions, resources)
 		}
 	}
+	return
 }
 
 //
 // Start pertinent goprocs
 func (td *TicketD) Start() {
 	go func() {
-		td.ticketProc()
+		for {
+			if restart := td.ticketProc(); !restart {
+				break
+			}
+		}
 	}()
 	if td.snapshotPath != "" {
 		td.quitSnapChan = make(chan interface{})
 		go func() {
-			td.snapshotProc()
+			for {
+				if restart := td.snapshotProc(); !restart {
+					break
+				}
+			}
 		}()
 	}
 }
