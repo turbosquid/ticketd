@@ -34,17 +34,10 @@ func (c *Client) urlStr(path string) string {
 	return fmt.Sprintf("%s%s%s", c.baseUrl, apiPath, path)
 }
 
-func (c *Client) call(verb, path string, obj interface{}, objOut interface{}) (code int, err error) {
-	var requestBody []byte
-	if obj != nil {
-		requestBody, err = json.Marshal(obj)
-		if err != nil {
-			return
-		}
-	}
+func (c *Client) callBytes(verb, path string, in []byte, objOut interface{}) (code int, err error) {
 	var request *http.Request
-	if requestBody != nil {
-		request, err = http.NewRequest(verb, c.urlStr(path), bytes.NewBuffer(requestBody))
+	if in != nil {
+		request, err = http.NewRequest(verb, c.urlStr(path), bytes.NewBuffer(in))
 	} else {
 		request, err = http.NewRequest(verb, c.urlStr(path), nil)
 	}
@@ -69,6 +62,18 @@ func (c *Client) call(verb, path string, obj interface{}, objOut interface{}) (c
 		// fmt.Printf("%d\n%s", code, string(body))
 		err = json.Unmarshal(body, objOut)
 	}
+	return
+}
+
+func (c *Client) call(verb, path string, obj interface{}, objOut interface{}) (code int, err error) {
+	var requestBody []byte
+	if obj != nil {
+		requestBody, err = json.Marshal(obj)
+		if err != nil {
+			return
+		}
+	}
+	code, err = c.callBytes(verb, path, requestBody, objOut)
 	return
 }
 
@@ -162,4 +167,45 @@ func (s *Session) CancelHeartBeat() {
 		s.heartBeatWg.Wait()
 		s.heartBeatChan = nil
 	}
+}
+
+//
+// Issue and revoke tickets
+func (s *Session) IssueTicket(resource, name string, data []byte) (code int, err error) {
+	errMsg := ""
+	code, err = s.c.callBytes("POST", fmt.Sprintf("/tickets/%s?name=%s&sessid=%s", resource, name, s.Id), data, &errMsg)
+	return
+}
+
+func (s *Session) RevokeTicket(resource, name string) (code int, err error) {
+	errMsg := ""
+	code, err = s.c.call("POST", fmt.Sprintf("/tickets/%s?name=%s&sessid=%s", resource, name, s.Id), nil, &errMsg)
+	return
+}
+
+//
+// Claim and release tickets
+func (s *Session) ClaimTicket(resource string) (ok bool, ticket *ticket.Ticket, code int, err error) {
+	resp := &TicketResponse{}
+	code, err = s.c.call("POST", fmt.Sprintf("/claims/%s?sessid=%s", resource, s.Id), nil, resp)
+	if err != nil {
+		return
+	}
+	if !resp.Claimed {
+		return false, nil, 0, nil
+	}
+	ok = true
+	ticket = &(resp.Ticket)
+	return
+}
+
+func (s *Session) ReleaseTicket(resource, name string) (code int, err error) {
+	errMsg := ""
+	code, err = s.c.call("DELETE", fmt.Sprintf("/claims/%s?name=%s&sessid=%s", resource, name, s.Id), nil, &errMsg)
+	return
+}
+
+func (s *Session) HasTicket(resource, name string) (ok bool, code int, err error) {
+	code, err = s.c.call("GET", fmt.Sprintf("/claims/%s?name=%s&sessid=%s", resource, name, s.Id), nil, &ok)
+	return
 }
