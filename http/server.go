@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/julienschmidt/httprouter"
 	"github.com/turbosquid/ticketd/ticket"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -13,18 +14,18 @@ import (
 	"strconv"
 )
 
-func HttpError(w http.ResponseWriter, msg string, code int) {
-	w.Header().Set("Content-Type", "text/plain")
-	w.WriteHeader(code)
-	w.Write([]byte(msg))
+// Ticket response -- adds a "claimed" bool
+type TicketResponse struct {
+	Claimed bool
+	Ticket  ticket.Ticket
 }
 
 func ApiErr(w http.ResponseWriter, err error) {
-	code := 500
+	code := http.StatusInternalServerError
 	if errors.Is(err, ticket.ErrNotFound) {
-		code = 404
+		code = http.StatusNotFound
 	}
-	HttpError(w, err.Error(), code)
+	http.Error(w, err.Error(), code)
 }
 
 func Json(w http.ResponseWriter, data interface{}, code int) {
@@ -38,7 +39,7 @@ func Json(w http.ResponseWriter, data interface{}, code int) {
 }
 
 func panicHandler(msg string, w http.ResponseWriter, r *http.Request) {
-	HttpError(w, msg, 500)
+	http.Error(w, msg, 500)
 }
 
 func getSingleQueryParam(url *url.URL, qp string, defaultValue string) (ret string) {
@@ -107,6 +108,120 @@ func getSessions(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, par
 	}
 	Json(w, sess, 200)
 }
+
+// Issue a tickwt
+func postTickets(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+	resource := params.ByName("resource")
+	sessid := getSingleQueryParam(r.URL, "sessid", "")
+	name := getSingleQueryParam(r.URL, "name", "")
+	if sessid == "" {
+		http.Error(w, "Missing session id", http.StatusUnprocessableEntity)
+		return
+	}
+	if name == "" {
+		http.Error(w, "Missing ticket name", http.StatusUnprocessableEntity)
+		return
+	}
+	// Read the request body (ticket data). 1K limit
+	r.Body = http.MaxBytesReader(w, r.Body, 1024)
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusRequestEntityTooLarge)
+		return
+	}
+	err = td.IssueTicket(sessid, resource, name, body)
+	if err != nil {
+		ApiErr(w, err)
+		return
+	}
+	Json(w, "Ok", 200)
+}
+
+// Revoke  a tickwt
+func deleteTickets(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+	resource := params.ByName("resource")
+	sessid := getSingleQueryParam(r.URL, "sessid", "")
+	name := getSingleQueryParam(r.URL, "name", "")
+	if sessid == "" {
+		http.Error(w, "Missing session id", http.StatusUnprocessableEntity)
+		return
+	}
+	if name == "" {
+		http.Error(w, "Missing ticket name", http.StatusUnprocessableEntity)
+		return
+	}
+	err := td.ReleaseTicket(sessid, resource, name)
+	if err != nil {
+		ApiErr(w, err)
+		return
+	}
+	Json(w, "Ok", 200)
+}
+
+// Claim  a tickwt
+func postClaims(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+	resource := params.ByName("resource")
+	sessid := getSingleQueryParam(r.URL, "sessid", "")
+	if sessid == "" {
+		http.Error(w, "Missing session id", http.StatusUnprocessableEntity)
+		return
+	}
+	ok, ticket, err := td.ClaimTicket(sessid, resource)
+	if err != nil {
+		ApiErr(w, err)
+		return
+	}
+	tr := &TicketResponse{}
+	tr.Claimed = ok
+	if ok {
+		tr.Ticket = *ticket
+	}
+	Json(w, tr, 200)
+}
+
+//
+// Releae a ticket
+func deleteClaims(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+	resource := params.ByName("resource")
+	sessid := getSingleQueryParam(r.URL, "sessid", "")
+	name := getSingleQueryParam(r.URL, "name", "")
+	if sessid == "" {
+		http.Error(w, "Missing session id", http.StatusUnprocessableEntity)
+		return
+	}
+	if name == "" {
+		http.Error(w, "Missing ticket name", http.StatusUnprocessableEntity)
+		return
+	}
+	err := td.ReleaseTicket(sessid, resource, name)
+	if err != nil {
+		ApiErr(w, err)
+		return
+	}
+	Json(w, "Ok", 200)
+}
+
+// Get (check to see if we have)   a tickwt
+func getClaims(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+	resource := params.ByName("resource")
+	sessid := getSingleQueryParam(r.URL, "sessid", "")
+	name := getSingleQueryParam(r.URL, "name", "")
+	if sessid == "" {
+		http.Error(w, "Missing session id", http.StatusUnprocessableEntity)
+		return
+	}
+	if name == "" {
+		http.Error(w, "Missing ticket name", http.StatusUnprocessableEntity)
+		return
+	}
+	ok, err := td.HasTicket(sessid, resource, name)
+	if err != nil {
+		ApiErr(w, err)
+		return
+	}
+	Json(w, ok, 200)
+}
+
 func StartServer(listenOn string, td *ticket.TicketD) (svr *http.Server) {
 	log.Printf("Starting ticked API server on: %s", listenOn)
 	router := httprouter.New()
@@ -118,6 +233,11 @@ func StartServer(listenOn string, td *ticket.TicketD) (svr *http.Server) {
 	router.PUT("/api/v1/sessions/:id", middleWare(td, putSessions))
 	router.DELETE("/api/v1/sessions/:id", middleWare(td, deleteSessions))
 	router.GET("/api/v1/sessions/:id", middleWare(td, getSessions))
+	router.POST("/api/v1/tickets/:resource", middleWare(td, postTickets))
+	router.DELETE("/api/v1/tickets/:resource", middleWare(td, deleteTickets))
+	router.POST("/api/v1/claims/:resource", middleWare(td, postClaims))
+	router.DELETE("/api/v1/claims/:resource", middleWare(td, deleteClaims))
+	router.GET("/api/v1/claims/:resource", middleWare(td, getClaims))
 	go func() {
 		if err := svr.ListenAndServe(); err != http.ErrServerClosed {
 			log.Fatalf("Unable to start http server on %s -> %s", listenOn, err.Error())
