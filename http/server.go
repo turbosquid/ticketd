@@ -222,6 +222,16 @@ func getClaims(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, param
 	Json(w, ok, 200)
 }
 
+func getDumpSessions(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+	sessions := td.GetSessions()
+	Json(w, sessions, 200)
+}
+
+func getDumpResources(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+	resources := td.GetResources()
+	Json(w, resources, 200)
+}
+
 func StartServer(listenOn string, td *ticket.TicketD) (svr *http.Server) {
 	log.Printf("Starting ticked API server on: %s", listenOn)
 	router := httprouter.New()
@@ -238,6 +248,8 @@ func StartServer(listenOn string, td *ticket.TicketD) (svr *http.Server) {
 	router.POST("/api/v1/claims/:resource", middleWare(td, postClaims))
 	router.DELETE("/api/v1/claims/:resource", middleWare(td, deleteClaims))
 	router.GET("/api/v1/claims/:resource", middleWare(td, getClaims))
+	router.GET("/api/v1/dump/sessions", middleWare(td, getDumpSessions))
+	router.GET("/api/v1/dump/resources", middleWare(td, getDumpResources))
 	go func() {
 		if err := svr.ListenAndServe(); err != http.ErrServerClosed {
 			log.Fatalf("Unable to start http server on %s -> %s", listenOn, err.Error())
