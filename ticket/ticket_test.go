@@ -347,7 +347,7 @@ func dumpResources(t *testing.T, td *TicketD, resources map[string]*Resource) {
 	}
 	t.Logf("Dumping resource table...")
 	for _, rv := range resources {
-		t.Logf("resource: %s", rv.Name)
+		t.Logf("resource: %s  isLock: %t", rv.Name, rv.IsLock)
 		for _, tick := range rv.Tickets {
 			t.Logf("    ticket: %s", tick.Name)
 			t.Logf("        issuer: %s (%s)", tick.Issuer.Id, tick.Issuer.Name)

@@ -531,7 +531,7 @@ func (td *TicketD) GetResources() (out map[string]*Resource) {
 	defer close(errChan)
 	f := func(sessions map[string]*Session, resources map[string]*Resource) {
 		for k, v := range resources {
-			nr := Resource{Name: k, Tickets: make(map[string]*Ticket)}
+			nr := Resource{Name: k, IsLock: v.IsLock, Tickets: make(map[string]*Ticket)}
 			for tn, tick := range v.Tickets {
 				nr.Tickets[tn] = tick.clone()
 			}
