@@ -559,6 +559,7 @@ func (td *TicketD) Lock(sessId, resource string) (ok bool, err error) {
 		r := resources[resource]
 		if r == nil {
 			r = NewResource(resource, true)
+			resources[resource] = r
 		} else if !r.IsLock {
 			errChan <- fmt.Errorf("Cannot lock/unlock a non-lock  resource (%s) - %w", resource, ErrResourceType)
 			return
@@ -569,6 +570,11 @@ func (td *TicketD) Lock(sessId, resource string) (ok bool, err error) {
 			errChan <- fmt.Errorf("Malformed lock resource %s. More than one ticket present or wrong ticket name in resource", resource)
 			return
 		}
+		if ticket == nil {
+			ticket = NewTicket(resource, resource, sess, []byte{})
+			r.Tickets[resource] = ticket
+			sess.Issuances = ticketAddOrUpdate(sess.Issuances, ticket)
+		}
 		// If the single ticket is not nil, then it must belong to us (issuer) or we can't lock it
 		if ticket != nil && ticket.Issuer.Id == sess.Id {
 			ok = true
@@ -576,10 +582,6 @@ func (td *TicketD) Lock(sessId, resource string) (ok bool, err error) {
 			return
 		}
 		// No icket, so we can claim it
-		ok = true
-		ticket = NewTicket(resource, resource, sess, []byte{})
-		r.Tickets[resource] = ticket
-		sess.Issuances = ticketAddOrUpdate(sess.Issuances, ticket)
 		errChan <- nil
 	}
 	td.ticketChan <- f
@@ -614,8 +616,8 @@ func (td *TicketD) Unlock(sessId, resource string) (err error) {
 			return
 		}
 		// If the single ticket is not nil, then it must belong to us (issuer) or we can't lock it
-		if ticket.Issuer.Id == sess.Id {
-			errChan <- fmt.Errorf("Resource %s is not locked  by another session (%w)", resource, ErrNotFound)
+		if ticket.Issuer.Id != sess.Id {
+			errChan <- fmt.Errorf("Resource %s is locked  by another session (%w)", resource, ErrNotFound)
 			return
 		}
 		// There is a ticket and we are the issue -- so we can delete the ticket
