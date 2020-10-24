@@ -232,3 +232,14 @@ func (s *Session) HasTicket(resource, name string) (ok bool, err error) {
 	err = s.c.call("GET", fmt.Sprintf("/claims/%s?name=%s&sessid=%s", resource, name, s.Id), nil, &ok)
 	return
 }
+
+func (s *Session) Lock(resource string) (ok bool, err error) {
+	err = s.c.call("POST", fmt.Sprintf("/locks/%s?sessid=%s", resource, s.Id), nil, &ok)
+	return
+}
+
+func (s *Session) Unlock(resource string) (err error) {
+	errMsg := ""
+	err = s.c.call("DELETE", fmt.Sprintf("/locks/%s?sessid=%s", resource, s.Id), nil, &errMsg)
+	return
+}

@@ -181,6 +181,33 @@ func TestTickets(t *testing.T) {
 	r.Nil(ticket)
 }
 
+func TestLocks(t *testing.T) {
+	r := require.New(t)
+	td, svr := startServer()
+	defer stopServer(td, svr)
+	cli := NewClient("http://localhost:8080", 1*time.Second)
+	time.Sleep(10 * time.Millisecond) // We have to allow server time to start
+	// Open a session
+	session1, err := cli.OpenSession("session1", 100)
+	r.NoError(err)
+	session2, err := cli.OpenSession("session2", 100)
+	r.NoError(err)
+	ok, err := session1.Lock("foo.bar")
+	r.NoError(err)
+	r.True(ok)
+
+	ok, err = session2.Lock("foo.bar")
+	r.NoError(err)
+	r.False(ok)
+
+	err = session1.Unlock("foo.bar")
+	r.NoError(err)
+
+	ok, err = session2.Lock("foo.bar")
+	r.NoError(err)
+	r.True(ok)
+}
+
 func startServer() (td *ticket.TicketD, svr *http.Server) {
 	td = ticket.NewTicketD(500, "", 0, &ticket.DefaultLogger{1})
 	td.Start()
