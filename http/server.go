@@ -222,6 +222,36 @@ func getClaims(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, param
 	Json(w, ok, 200)
 }
 
+func postLocks(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+	resource := params.ByName("resource")
+	sessid := getSingleQueryParam(r.URL, "sessid", "")
+	if sessid == "" {
+		http.Error(w, "Missing session id", http.StatusUnprocessableEntity)
+		return
+	}
+	ok, err := td.Lock(sessid, resource)
+	if err != nil {
+		ApiErr(w, err)
+		return
+	}
+	Json(w, ok, 200)
+}
+
+func deleteLocks(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+	resource := params.ByName("resource")
+	sessid := getSingleQueryParam(r.URL, "sessid", "")
+	if sessid == "" {
+		http.Error(w, "Missing session id", http.StatusUnprocessableEntity)
+		return
+	}
+	err := td.Unlock(sessid, resource)
+	if err != nil {
+		ApiErr(w, err)
+		return
+	}
+	Json(w, "ok", 200)
+}
+
 func getDumpSessions(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 	sessions := td.GetSessions()
 	Json(w, sessions, 200)
@@ -248,6 +278,8 @@ func StartServer(listenOn string, td *ticket.TicketD) (svr *http.Server) {
 	router.POST("/api/v1/claims/:resource", middleWare(td, postClaims))
 	router.DELETE("/api/v1/claims/:resource", middleWare(td, deleteClaims))
 	router.GET("/api/v1/claims/:resource", middleWare(td, getClaims))
+	router.POST("/api/v1/locks/:resource", middleWare(td, postLocks))
+	router.DELETE("/api/v1/locks/:resource", middleWare(td, deleteLocks))
 	router.GET("/api/v1/dump/sessions", middleWare(td, getDumpSessions))
 	router.GET("/api/v1/dump/resources", middleWare(td, getDumpResources))
 	go func() {
