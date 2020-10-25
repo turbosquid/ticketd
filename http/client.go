@@ -243,3 +243,13 @@ func (s *Session) Unlock(resource string) (err error) {
 	err = s.c.call("DELETE", fmt.Sprintf("/locks/%s?sessid=%s", resource, s.Id), nil, &errMsg)
 	return
 }
+
+func (c *Client) GetSessions() (sessions map[string]*ticket.Session, err error) {
+	err = c.call("GET", "/dump/sessions", nil, &sessions)
+	return
+}
+
+func (c *Client) GetResources() (resources map[string]*ticket.Resource, err error) {
+	err = c.call("GET", "/dump/resources", nil, &resources)
+	return
+}

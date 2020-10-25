@@ -208,6 +208,40 @@ func TestLocks(t *testing.T) {
 	r.True(ok)
 }
 
+func TestDump(t *testing.T) {
+	r := require.New(t)
+	td, svr := startServer()
+	defer stopServer(td, svr)
+	cli := NewClient("http://localhost:8080", 1*time.Second)
+	time.Sleep(10 * time.Millisecond) // We have to allow server time to start
+	// Open sessions
+	session1, err := cli.OpenSession("session1", 100)
+	r.NoError(err)
+	r.NotNil(session1)
+	session2, err := cli.OpenSession("session2", 100)
+	r.NoError(err)
+	r.NotNil(session2)
+	sessions, err := cli.GetSessions()
+	r.NoError(err)
+	r.NotNil(sessions)
+	r.Equal(2, len(sessions))
+	session1.IssueTicket("test", "ticket-1", []byte("FOO"))
+	session1.IssueTicket("test", "ticket-2", []byte("FOO"))
+	session2.IssueTicket("test2", "ticket-1", []byte("FOO"))
+	session2.IssueTicket("test2", "ticket-2", []byte("FOO"))
+	session1.IssueTicket("test2", "ticket-s31", []byte("FOO"))
+	resources, err := cli.GetResources()
+	r.NoError(err)
+	r.NotNil(resources)
+	r.Equal(2, len(resources))
+	r.NotNil(resources["test"])
+	r.NotNil(resources["test2"])
+	r.Equal(2, len(resources["test"].Tickets))
+	r.Equal(3, len(resources["test2"].Tickets))
+	dumpSessions(t, sessions)
+	dumpResources(t, resources)
+}
+
 func startServer() (td *ticket.TicketD, svr *http.Server) {
 	td = ticket.NewTicketD(500, "", 0, &ticket.DefaultLogger{1})
 	td.Start()
@@ -220,4 +254,27 @@ func stopServer(td *ticket.TicketD, svr *http.Server) (err error) {
 	err = svr.Shutdown(ctx)
 	td.Quit()
 	return
+}
+
+func dumpSessions(t *testing.T, sessions map[string]*ticket.Session) {
+	t.Logf("Dumping session table...")
+	for _, s := range sessions {
+		t.Logf("sess: %s %s %s %d ms", s.Name, s.Id, s.Src, s.Ttl)
+	}
+	t.Logf("== END ==")
+}
+
+func dumpResources(t *testing.T, resources map[string]*ticket.Resource) {
+	t.Logf("Dumping resource table...")
+	for _, rv := range resources {
+		t.Logf("resource: %s  isLock: %t", rv.Name, rv.IsLock)
+		for _, tick := range rv.Tickets {
+			t.Logf("    ticket: %s", tick.Name)
+			t.Logf("        issuer: %s (%s)", tick.Issuer.Id, tick.Issuer.Name)
+			if tick.Claimant != nil {
+				t.Logf("        claimant: %s (%s)", tick.Claimant.Id, tick.Claimant.Name)
+			}
+		}
+	}
+	t.Logf("== END ==")
 }
