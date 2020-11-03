@@ -7,6 +7,7 @@ import (
 	"github.com/turbosquid/ticketd/ticket"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 )
@@ -103,6 +104,7 @@ func (c *Client) call(verb, path string, obj interface{}, objOut interface{}) (e
 // Opena new session
 func (c *Client) OpenSession(name string, ttlMs int) (session *Session, err error) {
 	id := ""
+	name = url.QueryEscape(name)
 	err = c.call("POST", fmt.Sprintf("/sessions?name=%s&ttl=%d", name, ttlMs), nil, &id)
 	if err != nil {
 		return
@@ -196,12 +198,14 @@ func (s *Session) CancelHeartBeat() {
 // Issue and revoke tickets
 func (s *Session) IssueTicket(resource, name string, data []byte) (err error) {
 	errMsg := ""
+	name = url.QueryEscape(name)
 	err = s.c.callBytes("POST", fmt.Sprintf("/tickets/%s?name=%s&sessid=%s", resource, name, s.Id), data, &errMsg)
 	return
 }
 
 func (s *Session) RevokeTicket(resource, name string) (err error) {
 	errMsg := ""
+	name = url.QueryEscape(name)
 	err = s.c.call("DELETE", fmt.Sprintf("/tickets/%s?name=%s&sessid=%s", resource, name, s.Id), nil, &errMsg)
 	return
 }
@@ -224,11 +228,13 @@ func (s *Session) ClaimTicket(resource string) (ok bool, ticket *ticket.Ticket, 
 
 func (s *Session) ReleaseTicket(resource, name string) (err error) {
 	errMsg := ""
+	name = url.QueryEscape(name)
 	err = s.c.call("DELETE", fmt.Sprintf("/claims/%s?name=%s&sessid=%s", resource, name, s.Id), nil, &errMsg)
 	return
 }
 
 func (s *Session) HasTicket(resource, name string) (ok bool, err error) {
+	name = url.QueryEscape(name)
 	err = s.c.call("GET", fmt.Sprintf("/claims/%s?name=%s&sessid=%s", resource, name, s.Id), nil, &ok)
 	return
 }

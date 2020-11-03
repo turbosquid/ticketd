@@ -25,7 +25,7 @@ func TestSession(t *testing.T) {
 	cli := NewClient("http://localhost:8080", 1*time.Second)
 	time.Sleep(10 * time.Millisecond) // We have to allow server time to start
 	// Open a session
-	sess, err := cli.OpenSession("test-1", 100)
+	sess, err := cli.OpenSession("test 1 2 3", 100)
 	r.NoError(err)
 	r.NotNil(sess)
 	r.NotEmpty(sess.Id)
@@ -40,7 +40,7 @@ func TestSession(t *testing.T) {
 
 	t.Logf("got session: %#v", ts)
 	r.Equal(ts.Id, sess.Id)
-	r.Equal(ts.Name, "test-1")
+	r.Equal(ts.Name, "test 1 2 3")
 	r.Equal(ts.Ttl, 100)
 	// Close session
 	err = sess.Close()
@@ -131,7 +131,7 @@ func TestTickets(t *testing.T) {
 	claimant2, err := cli.OpenSession("claimant2", 100)
 	r.NoError(err)
 	//Issue a ticket
-	err = issuer.IssueTicket("test", "ticket-1", []byte("FOO"))
+	err = issuer.IssueTicket("test", "ticket 1", []byte("FOO"))
 	r.NoError(err)
 	// Claim ticket
 	ok, ticket, err := claimant.ClaimTicket("test")
@@ -139,7 +139,7 @@ func TestTickets(t *testing.T) {
 	r.True(ok)
 	r.NotNil(ticket)
 
-	r.Equal(ticket.Name, "ticket-1")
+	r.Equal(ticket.Name, "ticket 1")
 	r.Equal(ticket.ResourceName, "test")
 	r.Equal(ticket.Data, []byte("FOO"))
 	r.Equal(ticket.Claimant.Name, "claimant")
@@ -166,11 +166,11 @@ func TestTickets(t *testing.T) {
 	r.True(ok)
 	r.NotNil(ticket)
 	// Revoke ticket
-	err = issuer.RevokeTicket("test", "ticket-1")
+	err = issuer.RevokeTicket("test", "ticket 1")
 
 	r.NoError(err)
 	// Verify thst claimant2 no longer hs ticket
-	ok, err = claimant2.HasTicket("test", "ticket-1")
+	ok, err = claimant2.HasTicket("test", "ticket 1")
 	r.NoError(err)
 
 	r.False(ok)

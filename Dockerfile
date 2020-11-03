@@ -1,4 +1,4 @@
-FROM golang:1.13-alpine as builder
+FROM golang:1.15-alpine as builder
 LABEL description="farmhand build"
 MAINTAINER mowings@turbosquid.com
 ENV GOPATH=/go:/app:/app/vendor
