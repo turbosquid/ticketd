@@ -5,6 +5,7 @@ import (
 	"flag"
 	"github.com/turbosquid/ticketd/http"
 	"github.com/turbosquid/ticketd/ticket"
+	"github.com/turbosquid/ticketd/version"
 	"log"
 	"os"
 	"os/signal"

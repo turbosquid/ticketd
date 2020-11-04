@@ -262,7 +262,7 @@ func (t *Ticket) clone() (out *Ticket) {
 
 func ticketAddOrUpdate(oldArray []*Ticket, t *Ticket) []*Ticket {
 	for i, tk := range oldArray {
-		if tk.Name == t.Name {
+		if tk.Name == t.Name && tk.ResourceName == t.ResourceName {
 			oldArray[i] = t
 			return oldArray
 		}
@@ -272,7 +272,7 @@ func ticketAddOrUpdate(oldArray []*Ticket, t *Ticket) []*Ticket {
 
 func ticketRemove(oldArray []*Ticket, t *Ticket) []*Ticket {
 	for i, tk := range oldArray {
-		if tk.Name == t.Name {
+		if tk.Name == t.Name && tk.ResourceName == t.ResourceName {
 			oldArray[i] = oldArray[len(oldArray)-1]
 			return oldArray[:len(oldArray)-1]
 		}
