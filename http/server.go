@@ -6,18 +6,38 @@ import (
 	"fmt"
 	"github.com/julienschmidt/httprouter"
 	"github.com/turbosquid/ticketd/ticket"
+	"github.com/turbosquid/ticketd/version"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
+	"runtime"
 	"runtime/debug"
 	"strconv"
+	"time"
 )
+
+var timeStarted time.Time = time.Now()
 
 // Ticket response -- adds a "claimed" bool
 type TicketResponse struct {
 	Claimed bool
 	Ticket  ticket.Ticket
+}
+
+type ServerStatusResponse struct {
+	Version       string
+	Uptime        string
+	Started       string
+	Uptime_t      time.Duration
+	Started_t     time.Time
+	NumCpus       int
+	GoMaxProcs    int
+	NumGoroutines int
+	HeapAllocMB   float64
+	StackAllocMB  float64
+	SysAllocMB    float64
+	HeapObjects   uint64
 }
 
 func ApiErr(w http.ResponseWriter, err error) {
@@ -262,6 +282,27 @@ func getDumpResources(td *ticket.TicketD, w http.ResponseWriter, r *http.Request
 	Json(w, resources, 200)
 }
 
+func getStatus(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+	m := runtime.MemStats{}
+	runtime.ReadMemStats(&m)
+	resp := ServerStatusResponse{
+		Version:       version.VERSION,
+		Uptime_t:      time.Now().Sub(timeStarted),
+		Started_t:     timeStarted,
+		NumCpus:       runtime.NumCPU(),
+		GoMaxProcs:    runtime.GOMAXPROCS(-1),
+		NumGoroutines: runtime.NumGoroutine(),
+		HeapAllocMB:   float64(m.HeapAlloc) / 1048576.0,
+		SysAllocMB:    float64(m.Sys) / 1048576.0,
+		StackAllocMB:  float64(m.StackInuse) / 1048576.0,
+		HeapObjects:   m.HeapObjects,
+	}
+	resp.Uptime = fmtDuration(resp.Uptime_t)
+	// Format start and uptime
+	resp.Started = resp.Started_t.Format(time.RFC3339)
+	Json(w, resp, 200)
+}
+
 func StartServer(listenOn string, td *ticket.TicketD) (svr *http.Server) {
 	log.Printf("Starting ticked API server on: %s", listenOn)
 	router := httprouter.New()
@@ -282,6 +323,7 @@ func StartServer(listenOn string, td *ticket.TicketD) (svr *http.Server) {
 	router.DELETE("/api/v1/locks/:resource", middleWare(td, deleteLocks))
 	router.GET("/api/v1/dump/sessions", middleWare(td, getDumpSessions))
 	router.GET("/api/v1/dump/resources", middleWare(td, getDumpResources))
+	router.GET("/api/v1/status", middleWare(td, getStatus))
 	go func() {
 		if err := svr.ListenAndServe(); err != http.ErrServerClosed {
 			log.Fatalf("Unable to start http server on %s -> %s", listenOn, err.Error())
@@ -309,4 +351,16 @@ func middleWare(td *ticket.TicketD, handler func(td *ticket.TicketD, w http.Resp
 		}()
 		handler(td, w, req, params)
 	}
+}
+
+func fmtDuration(d time.Duration) string {
+	d = d.Round(time.Second)
+	days := d / (time.Hour * 24)
+	d -= days * time.Hour * 24
+	hours := d / time.Hour
+	d -= hours * time.Hour
+	minutes := d / time.Minute
+	d -= minutes * time.Minute
+	seconds := d / time.Second
+	return fmt.Sprintf("%d days, %02d:%02d:%02d", days, hours, minutes, seconds)
 }

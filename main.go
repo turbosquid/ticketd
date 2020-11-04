@@ -11,10 +11,8 @@ import (
 	"syscall"
 )
 
-const VERSION = "0.0.1"
-
 func main() {
-	log.Printf("TicketD v%s starts...", VERSION)
+	log.Printf("TicketD v%s starts...", version.VERSION)
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	// Flags
