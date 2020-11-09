@@ -176,7 +176,7 @@ func (td *TicketD) expireSessions(sessions map[string]*Session, resources map[st
 	for id, s := range sessions {
 		if s.expires.Before(time.Now()) {
 			td.logger.Log(3, "Expiring session %s (%s) with timeout %ds ms", s.Id, s.Name, s.Ttl)
-			s.clearClaims()
+			s.clearClaims(resources)
 			delete(sessions, id)
 		}
 	}
@@ -205,20 +205,35 @@ func (s *Session) refresh() {
 //
 // Clear session claims, issuances, etc
 // Used on expiration of session
-func (s *Session) clearClaims() {
+func (s *Session) clearClaims(resources map[string]*Resource) {
 	for _, ticket := range s.Tickets {
-		if ticket.Claimant == s {
-			ticket.Claimant = nil
+		t := fetchTicketPtr(ticket, resources) // Refresh ticket ptr -- can be out of date
+		if t != nil && t.Claimant == s {
+			log.Printf("Clearing session %s claim on ticket %s", s.Id, ticket.Name)
+			t.Claimant = nil
 		}
 	}
 	for _, ticket := range s.Issuances {
-		if ticket.Issuer == s {
-			ticket.Issuer = nil
+		t := fetchTicketPtr(ticket, resources) // Refresh ticket ptr -- can be out of date
+		if t != nil && t.Issuer == s {
+			log.Printf("Clearing session %s issuer  on ticket %s", s.Id, ticket.Name)
+			t.Issuer = nil
 		}
 	}
 	// Clear out arrays
 	s.Tickets = []*Ticket{}
 	s.Issuances = []*Ticket{}
+}
+
+//
+// Fetch a ticket pointer
+func fetchTicketPtr(in *Ticket, resources map[string]*Resource) (out *Ticket) {
+	r := resources[in.ResourceName]
+	if r == nil {
+		return
+	}
+	out = r.Tickets[in.Name]
+	return
 }
 
 // Clone a session
@@ -304,7 +319,7 @@ func (td *TicketD) CloseSession(id string) (err error) {
 	f := func(sessions map[string]*Session, resources map[string]*Resource) {
 		if s := sessions[id]; s != nil {
 			td.logger.Log(3, "Closing  session %s (%s)", s.Id, s.Name)
-			s.clearClaims()
+			s.clearClaims(resources)
 			delete(sessions, id)
 			errChan <- nil
 		} else {
