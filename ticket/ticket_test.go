@@ -145,14 +145,27 @@ func TestClaimantTimeout(t *testing.T) {
 	r.NoError(err)
 	err = td.IssueTicket(issuerId, "test", "foo", []byte("test foo data"))
 	r.NoError(err)
+	// Reissue ticket just to be sure we test multiple ticket issues of same ticket
+	err = td.IssueTicket(issuerId, "test", "foo", []byte("test foo data"))
+	r.NoError(err)
 	claimant1Id, err := td.OpenSession("test claimant 1", "ANY", 500)
 	r.NoError(err)
 	claimant2Id, err := td.OpenSession("test claimant 2", "ANY", 2000)
 	r.NoError(err)
+	// First session claims ticket
 	ok, ticket, err := td.ClaimTicket(claimant1Id, "test")
 	r.True(ok)
 	r.NoError(err)
+	// Reissue ticket just to be sure we test multiple ticket issues of same ticket
+	err = td.IssueTicket(issuerId, "test", "foo", []byte("test foo data"))
+	r.NoError(err)
+	// Confirm that after yet another issue, we still have ticket
+	ok, err = td.HasTicket(claimant1Id, "test", ticket.Name)
+	r.NoError(err)
+	r.True(ok)
+	// TIme out claimant 1
 	time.Sleep(1 * time.Second)
+	// Ticket should be available after first claimant1  times out
 	ok, ticket, err = td.ClaimTicket(claimant2Id, "test")
 	r.True(ok)
 	r.NoError(err)
