@@ -255,7 +255,11 @@ func (c *Client) GetSessions() (sessions map[string]*ticket.Session, err error) 
 	return
 }
 
-func (c *Client) GetResources() (resources map[string]*ticket.Resource, err error) {
-	err = c.call("GET", "/dump/resources", nil, &resources)
+func (c *Client) GetResources(name string) (resources map[string]*ticket.Resource, err error) {
+	if name == "" {
+		err = c.call("GET", "/dump/resources", nil, &resources)
+	} else {
+		err = c.call("GET", fmt.Sprintf("/dump/resources/%s", name), nil, &resources)
+	}
 	return
 }

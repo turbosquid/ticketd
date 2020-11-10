@@ -230,7 +230,7 @@ func TestDump(t *testing.T) {
 	session2.IssueTicket("test2", "ticket-1", []byte("FOO"))
 	session2.IssueTicket("test2", "ticket-2", []byte("FOO"))
 	session1.IssueTicket("test2", "ticket-s31", []byte("FOO"))
-	resources, err := cli.GetResources()
+	resources, err := cli.GetResources("")
 	r.NoError(err)
 	r.NotNil(resources)
 	r.Equal(2, len(resources))
@@ -238,6 +238,13 @@ func TestDump(t *testing.T) {
 	r.NotNil(resources["test2"])
 	r.Equal(2, len(resources["test"].Tickets))
 	r.Equal(3, len(resources["test2"].Tickets))
+	// Dump a specific resource
+	resource, err := cli.GetResources("test2")
+	r.NoError(err)
+	r.NotNil(resource)
+	r.NotNil(resource["test2"])
+	r.Equal(1, len(resource))
+	r.Equal(3, len(resource["test2"].Tickets))
 	dumpSessions(t, sessions)
 	dumpResources(t, resources)
 }

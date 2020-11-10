@@ -392,8 +392,10 @@ func (td *TicketD) IssueTicket(sessId string, resource string, name string, data
 		ticket := NewTicket(name, resource, sess, data)
 		// If ticket exists, but issued by another session we are just going to take it over
 		if oldTick := r.Tickets[name]; oldTick != nil {
-			oldTick.Issuer = nil // Mark this ticket as no longer valid
+			oldTick.Issuer = nil // Mark this issuer  as no longer valid
 			ticket.Claimant = oldTick.Claimant
+		} else {
+			td.logger.Log(3, "Session %s issuing ticket  %s (%s)", sess.Id, r.Name, name) // Only log on new ticket issuance
 		}
 		r.Tickets[name] = ticket // Set new ticket in ticket list
 		// Add ticket to issuance list if it is not there already
@@ -429,6 +431,7 @@ func (td *TicketD) RevokeTicket(sessId string, resource string, name string) (er
 			return
 		}
 		// We still allow revocation of a ticket, even if issued in another session
+		td.logger.Log(3, "Session %s revoking ticket  %s (%s)", sess.Id, r.Name, tick.Name)
 		delete(r.Tickets, name)
 		// Remove ticket from session issuance list
 		sess.Issuances = ticketRemove(sess.Issuances, tick)
@@ -469,6 +472,7 @@ func (td *TicketD) ClaimTicket(sessId string, resource string) (ok bool, t *Tick
 				ok = true
 				sess.Tickets = ticketAddOrUpdate(sess.Tickets, ticket)
 				t = ticket.clone()
+				td.logger.Log(3, "Session %s claimed ticket  %s (%s)", sess.Id, r.Name, t.Name)
 				break
 			}
 		}
@@ -500,6 +504,7 @@ func (td *TicketD) ReleaseTicket(sessId string, resource string, name string) (e
 		if ticket != nil && ticket.Claimant == sess {
 			ticket.Claimant = nil
 			sess.Tickets = ticketRemove(sess.Tickets, ticket)
+			td.logger.Log(3, "Session %s released ticket  %s (%s)", sess.Id, r.Name, ticket.Name)
 		}
 		errChan <- nil
 	}

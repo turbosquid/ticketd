@@ -278,7 +278,19 @@ func getDumpSessions(td *ticket.TicketD, w http.ResponseWriter, r *http.Request,
 }
 
 func getDumpResources(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+	resourceName := params.ByName("resource")
 	resources := td.GetResources()
+	if resourceName != "" {
+		r := resources[resourceName]
+		if r != nil {
+			ret := make(map[string]*ticket.Resource)
+			ret[resourceName] = r
+			Json(w, ret, 200)
+		} else {
+			ApiErr(w, ticket.ErrNotFound)
+		}
+		return
+	}
 	Json(w, resources, 200)
 }
 
@@ -323,6 +335,7 @@ func StartServer(listenOn string, td *ticket.TicketD) (svr *http.Server) {
 	router.DELETE("/api/v1/locks/:resource", middleWare(td, deleteLocks))
 	router.GET("/api/v1/dump/sessions", middleWare(td, getDumpSessions))
 	router.GET("/api/v1/dump/resources", middleWare(td, getDumpResources))
+	router.GET("/api/v1/dump/resources/:resource", middleWare(td, getDumpResources))
 	router.GET("/api/v1/status", middleWare(td, getStatus))
 	go func() {
 		if err := svr.ListenAndServe(); err != http.ErrServerClosed {
