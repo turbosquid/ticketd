@@ -136,6 +136,24 @@ func TestIssuerTimeout(t *testing.T) {
 	r.NoError(err)
 }
 
+func TestMultipleIssue(t *testing.T) {
+	r := require.New(t)
+	td := startTicketD(false)
+	defer stopTicketD(td)
+	// Create a session, issue a ticket and let it expire
+	issuerId, err := td.OpenSession("test issuer", "ANY", 500)
+	r.NoError(err)
+	err = td.IssueTicket(issuerId, "test", "test ticket #1", []byte("test foo data"))
+	r.NoError(err)
+	err = td.IssueTicket(issuerId, "test", "test ticket #1", []byte("test foo data"))
+	r.NoError(err)
+	err = td.IssueTicket(issuerId, "test", "test ticket #1", []byte("test foo data"))
+	r.NoError(err)
+	err = td.RevokeTicket(issuerId, "test", "test ticket #1")
+	r.NoError(err)
+
+}
+
 func TestClaimantTimeout(t *testing.T) {
 	r := require.New(t)
 	td := startTicketD(false)

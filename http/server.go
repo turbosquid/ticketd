@@ -162,6 +162,7 @@ func deleteTickets(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, p
 	resource := params.ByName("resource")
 	sessid := getSingleQueryParam(r.URL, "sessid", "")
 	name := getSingleQueryParam(r.URL, "name", "")
+	log.Printf("Revoking ticket: %s/%s for session %s", resource, name, sessid)
 	if sessid == "" {
 		http.Error(w, "Missing session id", http.StatusUnprocessableEntity)
 		return
@@ -175,6 +176,7 @@ func deleteTickets(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, p
 		ApiErr(w, err)
 		return
 	}
+	log.Printf("REVOKED ticket: %s/%s for session %s", resource, name, sessid)
 	Json(w, "Ok", 200)
 }
 

@@ -206,6 +206,7 @@ func (s *Session) IssueTicket(resource, name string, data []byte) (err error) {
 func (s *Session) RevokeTicket(resource, name string) (err error) {
 	errMsg := ""
 	name = url.QueryEscape(name)
+	Debug("Revoking ticket. Url:  /tickets/%s?name=%s&sessid=%s", resource, name, s.Id)
 	err = s.c.call("DELETE", fmt.Sprintf("/tickets/%s?name=%s&sessid=%s", resource, name, s.Id), nil, &errMsg)
 	return
 }
