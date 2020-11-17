@@ -184,21 +184,6 @@ func TestTickets(t *testing.T) {
 	r.Nil(ticket)
 }
 
-func TestRemote(t *testing.T) {
-	DebugFlag(true)
-	r := require.New(t)
-	cli := NewClient("http://ticketd-nola.hero3d.net:8001", 1*time.Second)
-	issuer, err := cli.OpenSession("test issuer", 10000)
-	r.NoError(err)
-	//Issue a ticket
-	err = issuer.IssueTicket(".test.foo.bar", "ticket #1", []byte("FOO"))
-	r.NoError(err)
-	time.Sleep(3 * time.Second)
-	// Revoke ticket
-	err = issuer.RevokeTicket(".test.foo.bar", "ticket #1")
-	r.NoError(err)
-}
-
 func TestLocks(t *testing.T) {
 	r := require.New(t)
 	td, svr := startServer()
