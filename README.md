@@ -16,3 +16,14 @@ Ticketd is very fast and uses comparatively few resources. While sessions, resou
 intervals. This snapshot is then reloaded upon server restart.
 
 Access is through either the Go client library, or the underlying REST api.
+
+## Running the server
+
+Ticketd supports the following commandline flags:
+
+* `-l` Listen address. Defaults to "0.0.0.0:8001"
+* `--snappath` Path to snapshot directory. Default is none. If set, ticketd will persist its state on an interval
+* `--expire` How often to check sessions for expiration, in ms. Defaults to 500 ms.
+* `--snapshot` How often to snapshot (if snappath was set). Defaults to 1000ms (1 sec)
+* `--loglevel` Numeric log levels. 0 for no logging. Higher is more verbose.
+
