@@ -315,6 +315,8 @@ func getStatus(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, param
 	Json(w, resp, 200)
 }
 
+//
+// Start ticketd api server
 func StartServer(listenOn string, td *ticket.TicketD) (svr *http.Server) {
 	log.Printf("Starting ticked API server on: %s", listenOn)
 	router := httprouter.New()
