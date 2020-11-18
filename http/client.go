@@ -1,3 +1,6 @@
+//
+// Package http provides a golang ticketd http client and server
+
 package http
 
 import (
