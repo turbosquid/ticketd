@@ -117,7 +117,7 @@ func (c *Client) call(verb, path string, obj interface{}, objOut interface{}) (e
 
 //
 // Open a new session. Sessions should not be shared across goroutines. The name need only be meaningfull to the client.
-// ttlMs is the session timeout in ms. Use RefrehSession to keep session alive
+// ttlMs is the session timeout in ms. Use RefreshSession to keep session alive
 func (c *Client) OpenSession(name string, ttlMs int) (session *Session, err error) {
 	id := ""
 	name = url.QueryEscape(name)
@@ -285,8 +285,7 @@ func (c *Client) GetSessions() (sessions map[string]*ticket.Session, err error) 
 }
 
 //
-// Get resource table
-//     name - optional resource name of interest. Leave empty for all resources
+// Get resource table. Include optional resource name of interest. Leave empty for all resources
 func (c *Client) GetResources(name string) (resources map[string]*ticket.Resource, err error) {
 	if name == "" {
 		err = c.call("GET", "/dump/resources", nil, &resources)
