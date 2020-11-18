@@ -19,12 +19,14 @@ import (
 
 var timeStarted time.Time = time.Now()
 
-// Ticket response -- adds a "claimed" bool
+// Ticket response -- adds a "claimed" bool to the base Ticket struct
 type TicketResponse struct {
 	Claimed bool
 	Ticket  ticket.Ticket
 }
 
+//
+// Server status response. Includes version, uptime, resource usage, etc
 type ServerStatusResponse struct {
 	Version       string
 	Uptime        string
@@ -40,7 +42,7 @@ type ServerStatusResponse struct {
 	HeapObjects   uint64
 }
 
-func ApiErr(w http.ResponseWriter, err error) {
+func apiErr(w http.ResponseWriter, err error) {
 	code := http.StatusInternalServerError
 	if errors.Is(err, ticket.ErrNotFound) {
 		code = http.StatusNotFound
@@ -48,7 +50,7 @@ func ApiErr(w http.ResponseWriter, err error) {
 	http.Error(w, err.Error(), code)
 }
 
-func Json(w http.ResponseWriter, data interface{}, code int) {
+func jsonResp(w http.ResponseWriter, data interface{}, code int) {
 	enc := json.NewEncoder(w)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
@@ -87,10 +89,10 @@ func postSessions(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, pa
 
 	id, err := td.OpenSession(name, r.RemoteAddr, ttl)
 	if err != nil {
-		ApiErr(w, err)
+		apiErr(w, err)
 		return
 	}
-	Json(w, id, 200)
+	jsonResp(w, id, 200)
 }
 
 // Refresh a session
@@ -99,10 +101,10 @@ func putSessions(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, par
 
 	err := td.RefreshSession(id)
 	if err != nil {
-		ApiErr(w, err)
+		apiErr(w, err)
 		return
 	}
-	Json(w, "Ok", 200)
+	jsonResp(w, "Ok", 200)
 }
 
 // Delete (close) a session
@@ -111,10 +113,10 @@ func deleteSessions(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, 
 
 	err := td.CloseSession(id)
 	if err != nil {
-		ApiErr(w, err)
+		apiErr(w, err)
 		return
 	}
-	Json(w, "Ok", 200)
+	jsonResp(w, "Ok", 200)
 }
 
 // Get  a session
@@ -123,10 +125,10 @@ func getSessions(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, par
 
 	sess, err := td.GetSession(id)
 	if err != nil {
-		ApiErr(w, err)
+		apiErr(w, err)
 		return
 	}
-	Json(w, sess, 200)
+	jsonResp(w, sess, 200)
 }
 
 // Issue a tickwt
@@ -151,10 +153,10 @@ func postTickets(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, par
 	}
 	err = td.IssueTicket(sessid, resource, name, body)
 	if err != nil {
-		ApiErr(w, err)
+		apiErr(w, err)
 		return
 	}
-	Json(w, "Ok", 200)
+	jsonResp(w, "Ok", 200)
 }
 
 // Revoke  a tickwt
@@ -172,10 +174,10 @@ func deleteTickets(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, p
 	}
 	err := td.RevokeTicket(sessid, resource, name)
 	if err != nil {
-		ApiErr(w, err)
+		apiErr(w, err)
 		return
 	}
-	Json(w, "Ok", 200)
+	jsonResp(w, "Ok", 200)
 }
 
 // Claim  a tickwt
@@ -188,7 +190,7 @@ func postClaims(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, para
 	}
 	ok, ticket, err := td.ClaimTicket(sessid, resource)
 	if err != nil {
-		ApiErr(w, err)
+		apiErr(w, err)
 		return
 	}
 	tr := &TicketResponse{}
@@ -196,7 +198,7 @@ func postClaims(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, para
 	if ok {
 		tr.Ticket = *ticket
 	}
-	Json(w, tr, 200)
+	jsonResp(w, tr, 200)
 }
 
 //
@@ -215,10 +217,10 @@ func deleteClaims(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, pa
 	}
 	err := td.ReleaseTicket(sessid, resource, name)
 	if err != nil {
-		ApiErr(w, err)
+		apiErr(w, err)
 		return
 	}
-	Json(w, "Ok", 200)
+	jsonResp(w, "Ok", 200)
 }
 
 // Get (check to see if we have)   a tickwt
@@ -236,10 +238,10 @@ func getClaims(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, param
 	}
 	ok, err := td.HasTicket(sessid, resource, name)
 	if err != nil {
-		ApiErr(w, err)
+		apiErr(w, err)
 		return
 	}
-	Json(w, ok, 200)
+	jsonResp(w, ok, 200)
 }
 
 func postLocks(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, params httprouter.Params) {
@@ -251,10 +253,10 @@ func postLocks(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, param
 	}
 	ok, err := td.Lock(sessid, resource)
 	if err != nil {
-		ApiErr(w, err)
+		apiErr(w, err)
 		return
 	}
-	Json(w, ok, 200)
+	jsonResp(w, ok, 200)
 }
 
 func deleteLocks(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, params httprouter.Params) {
@@ -266,15 +268,15 @@ func deleteLocks(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, par
 	}
 	err := td.Unlock(sessid, resource)
 	if err != nil {
-		ApiErr(w, err)
+		apiErr(w, err)
 		return
 	}
-	Json(w, "ok", 200)
+	jsonResp(w, "ok", 200)
 }
 
 func getDumpSessions(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 	sessions := td.GetSessions()
-	Json(w, sessions, 200)
+	jsonResp(w, sessions, 200)
 }
 
 func getDumpResources(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, params httprouter.Params) {
@@ -285,13 +287,13 @@ func getDumpResources(td *ticket.TicketD, w http.ResponseWriter, r *http.Request
 		if r != nil {
 			ret := make(map[string]*ticket.Resource)
 			ret[resourceName] = r
-			Json(w, ret, 200)
+			jsonResp(w, ret, 200)
 		} else {
-			ApiErr(w, ticket.ErrNotFound)
+			apiErr(w, ticket.ErrNotFound)
 		}
 		return
 	}
-	Json(w, resources, 200)
+	jsonResp(w, resources, 200)
 }
 
 func getStatus(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, params httprouter.Params) {
@@ -312,7 +314,7 @@ func getStatus(td *ticket.TicketD, w http.ResponseWriter, r *http.Request, param
 	resp.Uptime = fmtDuration(resp.Uptime_t)
 	// Format start and uptime
 	resp.Started = resp.Started_t.Format(time.RFC3339)
-	Json(w, resp, 200)
+	jsonResp(w, resp, 200)
 }
 
 //

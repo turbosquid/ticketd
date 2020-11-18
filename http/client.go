@@ -116,9 +116,8 @@ func (c *Client) call(verb, path string, obj interface{}, objOut interface{}) (e
 }
 
 //
-// Open a new session. Sessions should not be shared across goroutines
-//     name - Session name meaningful to client. Can be any string.
-//     ttlMs - session timeout in ms. Use RefrehSession to keep session alive
+// Open a new session. Sessions should not be shared across goroutines. The name need only be meaningfull to the client.
+// ttlMs is the session timeout in ms. Use RefrehSession to keep session alive
 func (c *Client) OpenSession(name string, ttlMs int) (session *Session, err error) {
 	id := ""
 	name = url.QueryEscape(name)
@@ -165,15 +164,10 @@ func (s *Session) Get() (sess *ticket.Session, err error) {
 }
 
 //
-// Run background "heartbeat" session refresh. Keeps session alive until
-//     a) The session is closed, or
-//     b) an http error occurs, or
-//     c) any other error occurs, unless we specify to ignore these. The idea is to optionally ignore transient connection errorsa
+// Run background "heartbeat" session refresh. Keeps session alive until he session is closed, an http error occurs or
+// any other error occurs, unless we specify to ignore these. The idea is to optionally ignore transient connection errorsa
 //
-//     interval -- interval between refreshes
-//     timeout -- http timeout for call
-//     ignoreNonHttpErrors -- keep trying on non-http errors
-//     notify  -- function to call on backgrund proc exit. Will pass error or nil
+// You will pass in a notification function as well. This is called when the heartbeet loop ends
 func (s *Session) RunHeartbeat(interval time.Duration, timeout time.Duration, ignoreNonHttpErrors bool, notify func(err error)) {
 	s.heartBeatChan = make(chan interface{})
 	// Make a copy of the session and change the timeout
@@ -212,10 +206,9 @@ func (s *Session) CancelHeartBeat() {
 }
 
 //
-// Issue a ticket.
-//     resource -  should be any valid url path segment (should not contain "/")
-//     name - ticket name. Should be unique within this resource
-//     data - Up to 1k of arbitrary data
+// Issue a ticket. The resource should be any valid url path segment (should not contain "/")
+// The ticket name should be unique within this resource
+// Tou can pas in up to 1K of arbitrary byte data in the ticket. This will be available to ticket claimants
 func (s *Session) IssueTicket(resource, name string, data []byte) (err error) {
 	errMsg := ""
 	name = url.QueryEscape(name)
@@ -225,8 +218,6 @@ func (s *Session) IssueTicket(resource, name string, data []byte) (err error) {
 
 //
 // Remove  a ticket. Ticket will no longer be available for a resource. Any sessions claiming this ticket will no longer hold a valid ticket
-//     resource - name of resource
-//     name - ticket name.
 func (s *Session) RevokeTicket(resource, name string) (err error) {
 	errMsg := ""
 	name = url.QueryEscape(name)
@@ -237,11 +228,8 @@ func (s *Session) RevokeTicket(resource, name string) (err error) {
 
 //
 // Claim a ticket
-// resource - resource name
-// Returns:
-//     ok - true if ticket available, false if not
-//     ticket - ticket.Ticket or nil if error or unavailable
-//     err - error. Note that if no ticket is available, err is nil (but ok is false)
+// Returns: ok - true if ticket available, false if not. A TicketResponse is returned if the claim succeeded.
+// Note that err is nil if a ticket is siply not available (but ok will be false)
 func (s *Session) ClaimTicket(resource string) (ok bool, ticket *ticket.Ticket, err error) {
 	resp := &TicketResponse{}
 	err = s.c.call("POST", fmt.Sprintf("/claims/%s?sessid=%s", resource, s.Id), nil, resp)
@@ -258,8 +246,6 @@ func (s *Session) ClaimTicket(resource string) (ok bool, ticket *ticket.Ticket, 
 
 //
 // Release a ticket back to resource
-//     resource - resource name
-//     name - ticket name
 func (s *Session) ReleaseTicket(resource, name string) (err error) {
 	errMsg := ""
 	name = url.QueryEscape(name)
