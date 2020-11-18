@@ -14,6 +14,9 @@ import (
 
 const apiPath = "/api/v1"
 
+//
+// Error type returned when we get a http error from the server. User
+// HttpErrorCode() to unpack
 type HttpError struct {
 	Code    int
 	Message string
@@ -27,6 +30,9 @@ func NewHttpError(code int, msg string) (err *HttpError) {
 	return &HttpError{code, msg}
 }
 
+//
+// Get http error code from error, or 0 if
+// error is not an http error
 func HttpErrorCode(err error) (code int) {
 	if err == nil {
 		return
@@ -37,11 +43,15 @@ func HttpErrorCode(err error) (code int) {
 	return
 }
 
+//
+// API Client -- shareable by multiple goroutines
 type Client struct {
 	baseUrl string
 	http.Client
 }
 
+//
+// Api session -- restricted to a single goroutie
 type Session struct {
 	c             *Client
 	Id            string
@@ -49,6 +59,8 @@ type Session struct {
 	heartBeatWg   sync.WaitGroup
 }
 
+//
+// Create a new api client
 func NewClient(url string, timeout time.Duration) (c *Client) {
 	c = &Client{url, http.Client{Timeout: timeout}}
 	return
@@ -101,7 +113,9 @@ func (c *Client) call(verb, path string, obj interface{}, objOut interface{}) (e
 }
 
 //
-// Opena new session
+// Open a new session. Sessions should not be shared across goroutines
+// name - Session name meaningful to client. Can be any string.
+// ttlMs - session timeout in ms. Use RefrehSession to keep session alive
 func (c *Client) OpenSession(name string, ttlMs int) (session *Session, err error) {
 	id := ""
 	name = url.QueryEscape(name)
@@ -126,7 +140,7 @@ func (s *Session) Close() (err error) {
 }
 
 //
-// Refresh this session at server
+// Refresh this session at server. Resets session expiration
 func (s *Session) Refresh() (err error) {
 	errMsg := ""
 	err = s.c.call("PUT", fmt.Sprintf("/sessions/%s", s.Id), nil, &errMsg)
@@ -137,7 +151,7 @@ func (s *Session) Refresh() (err error) {
 }
 
 //
-// Get a copy of this session
+// Get a copy of this session from the server
 func (s *Session) Get() (sess *ticket.Session, err error) {
 	sess = &ticket.Session{}
 	err = s.c.call("GET", fmt.Sprintf("/sessions/%s", s.Id), nil, sess)
@@ -195,7 +209,10 @@ func (s *Session) CancelHeartBeat() {
 }
 
 //
-// Issue and revoke tickets
+// Issue a ticket.
+// resource -  should be any valid url path segment (should not contain "/")
+// name - ticket name. Should be unique within this resource
+// data - Up to 1k of arbitrary data
 func (s *Session) IssueTicket(resource, name string, data []byte) (err error) {
 	errMsg := ""
 	name = url.QueryEscape(name)
@@ -203,6 +220,10 @@ func (s *Session) IssueTicket(resource, name string, data []byte) (err error) {
 	return
 }
 
+//
+// Remove  a ticket. Ticket will no longer be available for a resource. Any sessions claiming this ticket will no longer hold a valid ticket
+// resource - name of resource
+// name - ticket name.
 func (s *Session) RevokeTicket(resource, name string) (err error) {
 	errMsg := ""
 	name = url.QueryEscape(name)
@@ -212,7 +233,12 @@ func (s *Session) RevokeTicket(resource, name string) (err error) {
 }
 
 //
-// Claim and release tickets
+// Claim a ticket
+// resource - resource name
+// Returns:
+// ok - true if ticket available, false if not
+// ticket - ticket.Ticket or nil if error or unavailable
+// err - error. Note that if no ticket is available, err is nil (but ok is false)
 func (s *Session) ClaimTicket(resource string) (ok bool, ticket *ticket.Ticket, err error) {
 	resp := &TicketResponse{}
 	err = s.c.call("POST", fmt.Sprintf("/claims/%s?sessid=%s", resource, s.Id), nil, resp)
@@ -227,6 +253,10 @@ func (s *Session) ClaimTicket(resource string) (ok bool, ticket *ticket.Ticket, 
 	return
 }
 
+//
+// Release a ticket back to resource
+// resource - resource name
+// name - ticket name
 func (s *Session) ReleaseTicket(resource, name string) (err error) {
 	errMsg := ""
 	name = url.QueryEscape(name)
@@ -234,28 +264,40 @@ func (s *Session) ReleaseTicket(resource, name string) (err error) {
 	return
 }
 
+//
+// Verify that session has ticket
 func (s *Session) HasTicket(resource, name string) (ok bool, err error) {
 	name = url.QueryEscape(name)
 	err = s.c.call("GET", fmt.Sprintf("/claims/%s?name=%s&sessid=%s", resource, name, s.Id), nil, &ok)
 	return
 }
 
+//
+// Acquire exclusive lock on resource
+// ok will be true if acquired, else false
 func (s *Session) Lock(resource string) (ok bool, err error) {
 	err = s.c.call("POST", fmt.Sprintf("/locks/%s?sessid=%s", resource, s.Id), nil, &ok)
 	return
 }
 
+//
+// Release lock on resource
 func (s *Session) Unlock(resource string) (err error) {
 	errMsg := ""
 	err = s.c.call("DELETE", fmt.Sprintf("/locks/%s?sessid=%s", resource, s.Id), nil, &errMsg)
 	return
 }
 
+//
+// Get session table
 func (c *Client) GetSessions() (sessions map[string]*ticket.Session, err error) {
 	err = c.call("GET", "/dump/sessions", nil, &sessions)
 	return
 }
 
+//
+// Get resource table
+// name - optional resource name of interest. Leave empty for all resources
 func (c *Client) GetResources(name string) (resources map[string]*ticket.Resource, err error) {
 	if name == "" {
 		err = c.call("GET", "/dump/resources", nil, &resources)
