@@ -567,8 +567,8 @@ func (td *TicketD) GetResources() (out map[string]*Resource) {
 }
 
 //
-// Lock a lockable resource. If it does not exist, it will be created. If the resource exists, but is not lockable, an error is retured
-// return ok==true if lock succeeds
+// Lock a lockable resource. If it does not exist, it will be created. If the resource exists, but is not lockable, an error is retured.
+// Returns ok==true if lock succeeds. Else you can retry
 func (td *TicketD) Lock(sessId, resource string) (ok bool, err error) {
 	errChan := make(chan error)
 	defer close(errChan)
