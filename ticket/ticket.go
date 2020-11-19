@@ -76,7 +76,10 @@ func newSession(name, src string, ttl int) (s *Session) {
 }
 
 //
-// Create a new ticketd
+// Create a new ticketd instance. expireTickMs specifies how often to run the session expiration loop. Defaults to 1000ms. snapshotPath specifies a directory
+// to write snapshots to (we will attempt to create it). If empty, no snapshotting is done. snapshotInterval specifies (in ms) how often to
+// write out a snashot. Defaults to 1000ms. Finally, you can pass in your own logger. If no logger is  specified, you get a DefaultLogger (console) set to
+// a loglevel of 3.
 func NewTicketD(expireTickMs int, snapshotPath string, snapshotInterval int, logger Logger) (td *TicketD) {
 	td = &TicketD{make(chan ticketFunc), make(chan interface{}), nil,
 		expireTickMs, snapshotInterval, snapshotPath, logger}
@@ -137,7 +140,7 @@ func (td *TicketD) ticketProc() (restart bool) {
 }
 
 //
-// Start pertinent goprocs
+// Start ticketd. You have to start ticketd before using it
 func (td *TicketD) Start() {
 	go func() {
 		for {
@@ -159,7 +162,7 @@ func (td *TicketD) Start() {
 }
 
 //
-// Signal procs to stop using quit channels
+// Stop ticketd.
 func (td *TicketD) Quit() {
 	if td.quitSnapChan != nil {
 		td.logger.Log(2, "Signaling snapshotter to quit...")
@@ -313,7 +316,7 @@ func (td *TicketD) OpenSession(name, src string, ttl int) (id string, err error)
 }
 
 //
-// Close a sessio and release all tickets issued and claimed
+// Close a session and release all tickets issued and claimed
 func (td *TicketD) CloseSession(id string) (err error) {
 	errChan := make(chan error)
 	f := func(sessions map[string]*Session, resources map[string]*Resource) {
@@ -369,7 +372,7 @@ func (td *TicketD) RefreshSession(id string) (err error) {
 
 // Public functions for tickets
 
-// Add a ticket for a resource
+// Issue a ticket for a resource
 func (td *TicketD) IssueTicket(sessId string, resource string, name string, data []byte) (err error) {
 	errChan := make(chan error)
 	defer close(errChan)
@@ -408,7 +411,7 @@ func (td *TicketD) IssueTicket(sessId string, resource string, name string, data
 }
 
 //
-// Remove a ticket for a resource
+// Revoke a ticket for a resource
 func (td *TicketD) RevokeTicket(sessId string, resource string, name string) (err error) {
 	errChan := make(chan error)
 	defer close(errChan)
@@ -542,9 +545,8 @@ func (td *TicketD) HasTicket(sessId string, resource string, name string) (ok bo
 }
 
 //
-// Get Copies of session and resource maps
 
-// Resources
+// Get a copy of the resources table, along with all associated tickets
 func (td *TicketD) GetResources() (out map[string]*Resource) {
 	out = make(map[string]*Resource)
 	errChan := make(chan error)
@@ -565,7 +567,8 @@ func (td *TicketD) GetResources() (out map[string]*Resource) {
 }
 
 //
-// Lock
+// Lock a lockable resource. If it does not exist, it will be created. If the resource exists, but is not lockable, an error is retured
+// return ok==true if lock succeeds
 func (td *TicketD) Lock(sessId, resource string) (ok bool, err error) {
 	errChan := make(chan error)
 	defer close(errChan)
@@ -610,7 +613,7 @@ func (td *TicketD) Lock(sessId, resource string) (ok bool, err error) {
 }
 
 //
-// Unlock
+// Unlock a locked resource.
 func (td *TicketD) Unlock(sessId, resource string) (err error) {
 	errChan := make(chan error)
 	defer close(errChan)
@@ -651,7 +654,7 @@ func (td *TicketD) Unlock(sessId, resource string) (err error) {
 	return
 }
 
-// Sessions
+// Get a copy of the sessions table
 func (td *TicketD) GetSessions() (out map[string]*Session) {
 	out = make(map[string]*Session)
 	errChan := make(chan error)

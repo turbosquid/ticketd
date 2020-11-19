@@ -5,10 +5,15 @@ import (
 	"log"
 )
 
+//
+// Logging interface. If you want to create your own logger, be sure to conform to this interface
+// You can pass a logger to ticket.CreateTicketD
 type Logger interface {
 	Log(level int, fmtstr string, v ...interface{})
 }
 
+//
+// Default logger. Create with the desired log level
 type DefaultLogger struct {
 	Level int
 }
