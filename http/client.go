@@ -29,7 +29,7 @@ func (err *HttpError) Error() string {
 	return err.Message
 }
 
-func NewHttpError(code int, msg string) (err *HttpError) {
+func newHttpError(code int, msg string) (err *HttpError) {
 	return &HttpError{code, msg}
 }
 
@@ -54,7 +54,7 @@ type Client struct {
 }
 
 //
-// Api session -- restricted to a single goroutie
+// Api session -- restricted to a single goroutine
 type Session struct {
 	c             *Client
 	Id            string
@@ -95,7 +95,7 @@ func (c *Client) callBytes(verb, path string, in []byte, objOut interface{}) (er
 		return
 	}
 	if code >= 300 {
-		err = NewHttpError(code, fmt.Sprintf("HTTP %d = %s", code, string(body)))
+		err = newHttpError(code, fmt.Sprintf("HTTP %d = %s", code, string(body)))
 	} else {
 		// fmt.Printf("%d\n%s", code, string(body))
 		err = json.Unmarshal(body, objOut)
@@ -130,7 +130,7 @@ func (c *Client) OpenSession(name string, ttlMs int) (session *Session, err erro
 }
 
 //
-// Close this session
+// Close this session. Cancels heartbeat goroutine if in use
 func (s *Session) Close() (err error) {
 	s.CancelHeartBeat()
 	errMsg := ""
@@ -196,7 +196,7 @@ func (s *Session) RunHeartbeat(interval time.Duration, timeout time.Duration, ig
 }
 
 //
-// Cancel heartbeat proc -- if running, else a noop
+// Cancel heartbeat goroutine if running, else a noop. Automatically called on session close
 func (s *Session) CancelHeartBeat() {
 	if s.heartBeatChan != nil {
 		close(s.heartBeatChan)
@@ -207,8 +207,8 @@ func (s *Session) CancelHeartBeat() {
 
 //
 // Issue a ticket. The resource should be any valid url path segment (should not contain "/")
-// The ticket name should be unique within this resource
-// Tou can pas in up to 1K of arbitrary byte data in the ticket. This will be available to ticket claimants
+// The ticket name should be unique within this resource.
+// The issuer can pass in up to 1K of arbitrary byte data in the ticket. This data will be available to ticket claimants
 func (s *Session) IssueTicket(resource, name string, data []byte) (err error) {
 	errMsg := ""
 	name = url.QueryEscape(name)
@@ -228,8 +228,9 @@ func (s *Session) RevokeTicket(resource, name string) (err error) {
 
 //
 // Claim a ticket
-// Returns: ok - true if ticket available, false if not. A TicketResponse is returned if the claim succeeded.
+// Returns: ok = true if ticket available, false if not. A TicketResponse is returned if the claim succeeded.
 // Note that err is nil if a ticket is simply not available (but ok will be false)
+// A client that fails to claim a ticket can retry in a loop until successful (ok == true)
 func (s *Session) ClaimTicket(resource string) (ok bool, ticket *ticket.Ticket, err error) {
 	resp := &TicketResponse{}
 	err = s.c.call("POST", fmt.Sprintf("/claims/%s?sessid=%s", resource, s.Id), nil, resp)
@@ -245,7 +246,8 @@ func (s *Session) ClaimTicket(resource string) (ok bool, ticket *ticket.Ticket, 
 }
 
 //
-// Release a ticket back to resource
+// Release a ticket back to resource. The ticket will then be avalable to other clients. Closing a session or
+// session expirstion will release all claimed tickets
 func (s *Session) ReleaseTicket(resource, name string) (err error) {
 	errMsg := ""
 	name = url.QueryEscape(name)

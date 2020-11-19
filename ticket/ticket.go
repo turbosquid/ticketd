@@ -54,21 +54,21 @@ type Resource struct {
 
 //
 // Create a new resource
-func NewResource(name string, isLock bool) (r *Resource) {
+func newResource(name string, isLock bool) (r *Resource) {
 	r = &Resource{name, isLock, make(map[string]*Ticket)}
 	return
 }
 
 //
 // Create a new ticket
-func NewTicket(name, resname string, issuer *Session, data []byte) (t *Ticket) {
+func newTicket(name, resname string, issuer *Session, data []byte) (t *Ticket) {
 	t = &Ticket{name, resname, data, issuer, nil}
 	return
 }
 
 //
 // Creae a new session
-func NewSession(name, src string, ttl int) (s *Session) {
+func newSession(name, src string, ttl int) (s *Session) {
 	guid := ksuid.New()
 	s = &Session{Name: name, Id: guid.String(), Src: src, Ttl: ttl, Tickets: []*Ticket{}, Issuances: []*Ticket{}}
 	s.refresh()
@@ -300,7 +300,7 @@ func ticketRemove(oldArray []*Ticket, t *Ticket) []*Ticket {
 // Open a new session
 func (td *TicketD) OpenSession(name, src string, ttl int) (id string, err error) {
 	errChan := make(chan error)
-	s := NewSession(name, src, ttl)
+	s := newSession(name, src, ttl)
 	id = s.Id
 	f := func(sessions map[string]*Session, resources map[string]*Resource) {
 		sessions[s.Id] = s
@@ -383,13 +383,13 @@ func (td *TicketD) IssueTicket(sessId string, resource string, name string, data
 		// Create resource if it does not exist
 		r := resources[resource]
 		if r == nil {
-			r = NewResource(resource, false)
+			r = newResource(resource, false)
 			resources[resource] = r
 		} else if r.IsLock {
 			errChan <- fmt.Errorf("Cannot issue a ticket on a lock resource (%s) - %w", resource, ErrResourceType)
 			return
 		}
-		ticket := NewTicket(name, resource, sess, data)
+		ticket := newTicket(name, resource, sess, data)
 		// If ticket exists, but issued by another session we are just going to take it over
 		if oldTick := r.Tickets[name]; oldTick != nil {
 			oldTick.Issuer = nil // Mark this issuer  as no longer valid
@@ -578,7 +578,7 @@ func (td *TicketD) Lock(sessId, resource string) (ok bool, err error) {
 		// Get resource
 		r := resources[resource]
 		if r == nil {
-			r = NewResource(resource, true)
+			r = newResource(resource, true)
 			resources[resource] = r
 		} else if !r.IsLock {
 			errChan <- fmt.Errorf("Cannot lock/unlock a non-lock  resource (%s) - %w", resource, ErrResourceType)
@@ -591,7 +591,7 @@ func (td *TicketD) Lock(sessId, resource string) (ok bool, err error) {
 			return
 		}
 		if ticket == nil {
-			ticket = NewTicket(resource, resource, sess, []byte{})
+			ticket = newTicket(resource, resource, sess, []byte{})
 			r.Tickets[resource] = ticket
 			sess.Issuances = ticketAddOrUpdate(sess.Issuances, ticket)
 		}
