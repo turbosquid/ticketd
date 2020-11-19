@@ -229,7 +229,7 @@ func (s *Session) RevokeTicket(resource, name string) (err error) {
 //
 // Claim a ticket
 // Returns: ok - true if ticket available, false if not. A TicketResponse is returned if the claim succeeded.
-// Note that err is nil if a ticket is siply not available (but ok will be false)
+// Note that err is nil if a ticket is simply not available (but ok will be false)
 func (s *Session) ClaimTicket(resource string) (ok bool, ticket *ticket.Ticket, err error) {
 	resp := &TicketResponse{}
 	err = s.c.call("POST", fmt.Sprintf("/claims/%s?sessid=%s", resource, s.Id), nil, resp)
