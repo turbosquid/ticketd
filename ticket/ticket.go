@@ -23,7 +23,7 @@ type TicketD struct {
 }
 
 //
-// Client sessiom
+// Client session
 type Session struct {
 	Name      string    // Optional -- only meaningful to client
 	Id        string    // Generated session ID
@@ -78,7 +78,7 @@ func newSession(name, src string, ttl int) (s *Session) {
 //
 // Create a new ticketd instance. expireTickMs specifies how often to run the session expiration loop. Defaults to 1000ms. snapshotPath specifies a directory
 // to write snapshots to (we will attempt to create it). If empty, no snapshotting is done. snapshotInterval specifies (in ms) how often to
-// write out a snashot. Defaults to 1000ms. Finally, you can pass in your own logger. If no logger is  specified, you get a DefaultLogger (console) set to
+// write out a snashot. Defaults to 1000ms. Finally, you can pass in your own logger. If no logger is  specified, you get a DefaultLogger (logs to console) set to
 // a loglevel of 3.
 func NewTicketD(expireTickMs int, snapshotPath string, snapshotInterval int, logger Logger) (td *TicketD) {
 	td = &TicketD{make(chan ticketFunc), make(chan interface{}), nil,
