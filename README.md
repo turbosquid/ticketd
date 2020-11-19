@@ -1,5 +1,8 @@
 # TicketD 
 
+[![GoDoc](https://img.shields.io/static/v1?label=godoc&message=reference&color=blue)](https://godoc.org/github.com/turbosquid/ticketd/http)
+
+
 Ticketd is a service that allows access to shared recources via tickets. Services can issue one or more tickets to access a specific resource. Clients
 can claim a ticket for a particular resource and do work against the resource while the ticket remains claimed. Once finished, the client releases the ticket, which makes it 
 available to the next client.
