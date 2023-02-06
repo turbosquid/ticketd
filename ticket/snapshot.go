@@ -11,7 +11,6 @@ import (
 	"time"
 )
 
-//
 // Load snapshot from disk if it exists
 func (td *TicketD) loadSnapshot(path string) (sessions map[string]*Session, resources map[string]*Resource, err error) {
 
@@ -78,7 +77,6 @@ func (td *TicketD) loadSnapshot(path string) (sessions map[string]*Session, reso
 	return
 }
 
-//
 // Optional snapshot loop
 func (td *TicketD) snapshotProc() (restart bool) {
 	ticker := time.NewTicker(time.Duration(td.snapshotInterval) * time.Millisecond)
@@ -107,10 +105,8 @@ func (td *TicketD) snapshotProc() (restart bool) {
 			return
 		}
 	}
-	return
 }
 
-//
 // Snapshot all the things
 func snapshot(path string, sessions map[string]*Session, resources map[string]*Resource) error {
 	if err := snapshotSessions(path, sessions); err != nil {
