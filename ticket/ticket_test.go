@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"github.com/stretchr/testify/require"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 var logLevel = flag.Int("loglevel", 0, "Log level to use")
@@ -353,7 +354,7 @@ func compareTicket(l *Ticket, r *Ticket) (ok bool, msgs []string) {
 	if l.ResourceName != r.ResourceName {
 		msgs = append(msgs, "Resource Names do not match")
 	}
-	if bytes.Compare(l.Data, r.Data) != 0 {
+	if !bytes.Equal(l.Data, r.Data) {
 		msgs = append(msgs, "Data do not match")
 	}
 	sessok, _ := compareSession(l.Claimant, r.Claimant)

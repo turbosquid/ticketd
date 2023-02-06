@@ -161,7 +161,7 @@ func (td *TicketD) Quit() {
 	}
 	td.logger.Log(2, "Signaling ticket processor to quit...")
 	td.quitChan <- nil
-	_ = <-td.quitChan
+	<-td.quitChan
 }
 
 func (td *TicketD) expireSessions(sessions map[string]*Session, resources map[string]*Resource) {
@@ -373,7 +373,7 @@ func (td *TicketD) IssueTicket(sessId string, resource string, name string, data
 			r = newResource(resource, false)
 			resources[resource] = r
 		} else if r.IsLock {
-			errChan <- fmt.Errorf("Cannot issue a ticket on a lock resource (%s) - %w", resource, ErrResourceType)
+			errChan <- fmt.Errorf("cannot issue a ticket on a lock resource (%s) - %w", resource, ErrResourceType)
 			return
 		}
 		ticket := newTicket(name, resource, sess, data)
@@ -407,13 +407,13 @@ func (td *TicketD) RevokeTicket(sessId string, resource string, name string) (er
 		// Get resource
 		r := resources[resource]
 		if r == nil {
-			errChan <- fmt.Errorf("Unknown resource: %s (%w)", resource, ErrNotFound)
+			errChan <- fmt.Errorf("unknown resource: %s (%w)", resource, ErrNotFound)
 			return
 		}
 		// Get ticket -- if it exists
 		tick := r.Tickets[name]
 		if tick == nil {
-			errChan <- fmt.Errorf("Unknown ticket for resource %s -> : %s", resource, name)
+			errChan <- fmt.Errorf("unknown ticket for resource %s -> : %s", resource, name)
 			return
 		}
 		// We still allow revocation of a ticket, even if issued in another session
@@ -448,7 +448,7 @@ func (td *TicketD) ClaimTicket(sessId string, resource string) (ok bool, t *Tick
 			errChan <- nil
 			return
 		} else if r.IsLock {
-			errChan <- fmt.Errorf("Cannot claim a ticket on a lock resource (%s) - %w", resource, ErrResourceType)
+			errChan <- fmt.Errorf("cannot claim a ticket on a lock resource (%s) - %w", resource, ErrResourceType)
 			return
 		}
 		for _, ticket := range r.Tickets {
@@ -481,7 +481,7 @@ func (td *TicketD) ReleaseTicket(sessId string, resource string, name string) (e
 		// Get resource
 		r := resources[resource]
 		if r == nil {
-			errChan <- fmt.Errorf("Unknown resource: %s (%w)", resource, ErrNotFound)
+			errChan <- fmt.Errorf("unknown resource: %s (%w)", resource, ErrNotFound)
 			return
 		}
 		ticket := r.Tickets[name]
@@ -510,7 +510,7 @@ func (td *TicketD) HasTicket(sessId string, resource string, name string) (ok bo
 		// Get resource
 		r := resources[resource]
 		if r == nil {
-			errChan <- fmt.Errorf("Unknown resource: %s (%w)", resource, ErrNotFound)
+			errChan <- fmt.Errorf("unknown resource: %s (%w)", resource, ErrNotFound)
 			return
 		}
 		ticket := r.Tickets[name]
@@ -563,13 +563,13 @@ func (td *TicketD) Lock(sessId, resource string) (ok bool, err error) {
 			r = newResource(resource, true)
 			resources[resource] = r
 		} else if !r.IsLock {
-			errChan <- fmt.Errorf("Cannot lock/unlock a non-lock  resource (%s) - %w", resource, ErrResourceType)
+			errChan <- fmt.Errorf("cannot lock/unlock a non-lock  resource (%s) - %w", resource, ErrResourceType)
 			return
 		}
 		ticket := r.Tickets[resource]
 		// We should have either no tickets or a single ticket with the same name as the resource
 		if len(r.Tickets) > 1 || (len(r.Tickets) == 1 && ticket == nil) {
-			errChan <- fmt.Errorf("Malformed lock resource %s. More than one ticket present or wrong ticket name in resource", resource)
+			errChan <- fmt.Errorf("malformed lock resource %s. More than one ticket present or wrong ticket name in resource", resource)
 			return
 		}
 		if ticket == nil {
@@ -598,16 +598,16 @@ func (td *TicketD) Unlock(sessId, resource string) (err error) {
 	f := func(sessions map[string]*Session, resources map[string]*Resource) {
 		sess := sessions[sessId]
 		if sess == nil {
-			errChan <- fmt.Errorf("Session not found: %s (%w)", sessId, ErrNotFound)
+			errChan <- fmt.Errorf("session not found: %s (%w)", sessId, ErrNotFound)
 			return
 		}
 		// Get resource
 		r := resources[resource]
 		if r == nil {
-			errChan <- fmt.Errorf("Could not find lock resource %s (%w)", resource, ErrNotFound)
+			errChan <- fmt.Errorf("could not find lock resource %s (%w)", resource, ErrNotFound)
 			return
 		} else if !r.IsLock {
-			errChan <- fmt.Errorf("Cannot lock/unlock a non-lock  resource (%s) - %w", resource, ErrResourceType)
+			errChan <- fmt.Errorf("cannot lock/unlock a non-lock  resource (%s) - %w", resource, ErrResourceType)
 			return
 		}
 		ticket := r.Tickets[resource]

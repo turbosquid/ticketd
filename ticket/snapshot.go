@@ -36,12 +36,12 @@ func (td *TicketD) loadSnapshot(path string) (sessions map[string]*Session, reso
 			// Be sure the things we THINK exist exist in resources
 			res := resources[ticket.ResourceName]
 			if res == nil {
-				return nil, nil, fmt.Errorf("Unable to find resource %s", ticket.ResourceName)
+				return nil, nil, fmt.Errorf("unable to find resource %s", ticket.ResourceName)
 			}
 			// Replace ticket pointer here to pointer from resources
 			sess.Tickets[i] = res.Tickets[ticket.Name]
 			if sess.Tickets[i] == nil {
-				return nil, nil, fmt.Errorf("Ticket %s does not exist for resource %s", ticket.Name, res.Name)
+				return nil, nil, fmt.Errorf("ticket %s does not exist for resource %s", ticket.Name, res.Name)
 			}
 			// Updateticket claimant pointer to THIS session pointer
 			sess.Tickets[i].Claimant = sess
@@ -50,12 +50,12 @@ func (td *TicketD) loadSnapshot(path string) (sessions map[string]*Session, reso
 			// Be sure the things we THINK exist exist in resources
 			res := resources[ticket.ResourceName]
 			if res == nil {
-				return nil, nil, fmt.Errorf("Unable to find resource %s", ticket.ResourceName)
+				return nil, nil, fmt.Errorf("unable to find resource %s", ticket.ResourceName)
 			}
 			// Replace ticket pointer here to pointer from resources
 			sess.Issuances[i] = res.Tickets[ticket.Name]
 			if sess.Issuances[i] == nil {
-				return nil, nil, fmt.Errorf("Ticket %s does not exist for resource %s", ticket.Name, res.Name)
+				return nil, nil, fmt.Errorf("ticket %s does not exist for resource %s", ticket.Name, res.Name)
 			}
 			sess.Issuances[i].Issuer = sess
 		}
@@ -92,14 +92,14 @@ func (td *TicketD) snapshotProc() (restart bool) {
 	}()
 	for {
 		select {
-		case _ = <-ticker.C:
+		case <-ticker.C:
 			sess := td.GetSessions()
 			res := td.GetResources()
 			err := snapshot(td.snapshotPath, sess, res)
 			if err != nil {
 				td.logger.Log(1, "Unable to snapshot: %s", err.Error())
 			}
-		case _ = <-td.quitSnapChan:
+		case <-td.quitSnapChan:
 			td.logger.Log(2, "Received quit signal. Exiting snapshot loop...")
 			close(td.quitSnapChan) // Signals to caller that we are stopped
 			return
@@ -110,11 +110,11 @@ func (td *TicketD) snapshotProc() (restart bool) {
 // Snapshot all the things
 func snapshot(path string, sessions map[string]*Session, resources map[string]*Resource) error {
 	if err := snapshotSessions(path, sessions); err != nil {
-		return fmt.Errorf("Unable to snapshot sessions: %s, %s", path, err.Error())
+		return fmt.Errorf("unable to snapshot sessions: %s, %s", path, err.Error())
 
 	}
 	if err := snapshotResources(path, resources); err != nil {
-		return fmt.Errorf("Unable to snapshot resources: %s, %s", path, err.Error())
+		return fmt.Errorf("unable to snapshot resources: %s, %s", path, err.Error())
 	}
 	return nil
 }
