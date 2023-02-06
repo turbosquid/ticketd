@@ -117,7 +117,7 @@ func (td *TicketD) ticketProc() (restart bool) {
 	td.logger.Log(2, "Ticket processing starting...")
 	for {
 		select {
-		case _ = <-ticker.C:
+		case <-ticker.C:
 			td.expireSessions(sessions, resources)
 		case q := <-td.quitChan:
 			if q == nil {
@@ -157,7 +157,7 @@ func (td *TicketD) Quit() {
 	if td.quitSnapChan != nil {
 		td.logger.Log(2, "Signaling snapshotter to quit...")
 		td.quitSnapChan <- nil
-		_ = <-td.quitSnapChan
+		<-td.quitSnapChan
 	}
 	td.logger.Log(2, "Signaling ticket processor to quit...")
 	td.quitChan <- nil
@@ -542,7 +542,7 @@ func (td *TicketD) GetResources() (out map[string]*Resource) {
 		errChan <- nil
 	}
 	td.ticketChan <- f
-	_ = <-errChan
+	<-errChan
 	return
 }
 
@@ -644,6 +644,6 @@ func (td *TicketD) GetSessions() (out map[string]*Session) {
 		errChan <- nil
 	}
 	td.ticketChan <- f
-	_ = <-errChan
+	<-errChan
 	return
 }
