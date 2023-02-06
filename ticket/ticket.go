@@ -2,10 +2,11 @@ package ticket
 
 import (
 	"fmt"
-	"github.com/segmentio/ksuid"
 	"log"
 	"runtime/debug"
 	"time"
+
+	"github.com/segmentio/ksuid"
 )
 
 const expireDelayMs = 1000
@@ -22,7 +23,6 @@ type TicketD struct {
 	logger           Logger
 }
 
-//
 // Client session
 type Session struct {
 	Name      string    // Optional -- only meaningful to client
@@ -34,7 +34,6 @@ type Session struct {
 	expires   time.Time
 }
 
-//
 // Ticket for a resource
 type Ticket struct {
 	Name         string   // ticket name
@@ -44,7 +43,6 @@ type Ticket struct {
 	Claimant     *Session // Session ID of ticket claimant, if there is one or empty
 }
 
-//
 // Resource -- a thing that can be claimed with a ticket
 type Resource struct {
 	Name    string
@@ -52,21 +50,18 @@ type Resource struct {
 	Tickets map[string]*Ticket
 }
 
-//
 // Create a new resource
 func newResource(name string, isLock bool) (r *Resource) {
 	r = &Resource{name, isLock, make(map[string]*Ticket)}
 	return
 }
 
-//
 // Create a new ticket
 func newTicket(name, resname string, issuer *Session, data []byte) (t *Ticket) {
 	t = &Ticket{name, resname, data, issuer, nil}
 	return
 }
 
-//
 // Creae a new session
 func newSession(name, src string, ttl int) (s *Session) {
 	guid := ksuid.New()
@@ -75,7 +70,6 @@ func newSession(name, src string, ttl int) (s *Session) {
 	return
 }
 
-//
 // Create a new ticketd instance. expireTickMs specifies how often to run the session expiration loop. Defaults to 1000ms. snapshotPath specifies a directory
 // to write snapshots to (we will attempt to create it). If empty, no snapshotting is done. snapshotInterval specifies (in ms) how often to
 // write out a snashot. Defaults to 1000ms. Finally, you can pass in your own logger. If no logger is  specified, you get a DefaultLogger (logs to console) set to
@@ -95,7 +89,6 @@ func NewTicketD(expireTickMs int, snapshotPath string, snapshotInterval int, log
 	return
 }
 
-//
 // Manage locks, sessions and tickets
 func (td *TicketD) ticketProc() (restart bool) {
 	sessions := make(map[string]*Session)
@@ -136,10 +129,8 @@ func (td *TicketD) ticketProc() (restart bool) {
 			f(sessions, resources)
 		}
 	}
-	return
 }
 
-//
 // Start ticketd. You have to start ticketd before using it
 func (td *TicketD) Start() {
 	go func() {
@@ -161,7 +152,6 @@ func (td *TicketD) Start() {
 	}
 }
 
-//
 // Stop ticketd.
 func (td *TicketD) Quit() {
 	if td.quitSnapChan != nil {
@@ -199,13 +189,11 @@ func (td *TicketD) expireSessions(sessions map[string]*Session, resources map[st
 	}
 }
 
-//
 // refresh session
 func (s *Session) refresh() {
 	s.expires = time.Now().Add(time.Millisecond * time.Duration(s.Ttl))
 }
 
-//
 // Clear session claims, issuances, etc
 // Used on expiration of session
 func (s *Session) clearClaims(resources map[string]*Resource) {
@@ -228,7 +216,6 @@ func (s *Session) clearClaims(resources map[string]*Resource) {
 	s.Issuances = []*Ticket{}
 }
 
-//
 // Fetch a ticket pointer
 func fetchTicketPtr(in *Ticket, resources map[string]*Resource) (out *Ticket) {
 	r := resources[in.ResourceName]
@@ -315,7 +302,6 @@ func (td *TicketD) OpenSession(name, src string, ttl int) (id string, err error)
 	return
 }
 
-//
 // Close a session and release all tickets issued and claimed
 func (td *TicketD) CloseSession(id string) (err error) {
 	errChan := make(chan error)
@@ -335,7 +321,6 @@ func (td *TicketD) CloseSession(id string) (err error) {
 	return
 }
 
-//
 // Get a copy of a session
 func (td *TicketD) GetSession(id string) (ret *Session, err error) {
 	errChan := make(chan error)
@@ -353,7 +338,6 @@ func (td *TicketD) GetSession(id string) (ret *Session, err error) {
 	return
 }
 
-//
 // Refresh session timer
 func (td *TicketD) RefreshSession(id string) (err error) {
 	errChan := make(chan error)
@@ -410,7 +394,6 @@ func (td *TicketD) IssueTicket(sessId string, resource string, name string, data
 	return
 }
 
-//
 // Revoke a ticket for a resource
 func (td *TicketD) RevokeTicket(sessId string, resource string, name string) (err error) {
 	errChan := make(chan error)
@@ -445,7 +428,6 @@ func (td *TicketD) RevokeTicket(sessId string, resource string, name string) (er
 	return
 }
 
-//
 // Claim a ticket for a resource
 // ok is true and ticket will have a copy of the ticket on success
 // If the ticket is clamed, ok will be false, and ticket will be nil. err eill be nil
@@ -486,7 +468,6 @@ func (td *TicketD) ClaimTicket(sessId string, resource string) (ok bool, t *Tick
 	return
 }
 
-//
 // Release a ticket for a resource back to pool
 func (td *TicketD) ReleaseTicket(sessId string, resource string, name string) (err error) {
 	errChan := make(chan error)
@@ -516,7 +497,6 @@ func (td *TicketD) ReleaseTicket(sessId string, resource string, name string) (e
 	return
 }
 
-//
 // Verify that a session holds a parituclar ticket
 func (td *TicketD) HasTicket(sessId string, resource string, name string) (ok bool, err error) {
 	errChan := make(chan error)
@@ -566,7 +546,6 @@ func (td *TicketD) GetResources() (out map[string]*Resource) {
 	return
 }
 
-//
 // Lock a lockable resource. If it does not exist, it will be created. If the resource exists, but is not lockable, an error is retured.
 // Returns ok==true if lock succeeds. Else you can retry
 func (td *TicketD) Lock(sessId, resource string) (ok bool, err error) {
@@ -612,7 +591,6 @@ func (td *TicketD) Lock(sessId, resource string) (ok bool, err error) {
 	return
 }
 
-//
 // Unlock a locked resource.
 func (td *TicketD) Unlock(sessId, resource string) (err error) {
 	errChan := make(chan error)
